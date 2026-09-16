@@ -1,4 +1,18 @@
 # Baseline Predictive Pipeline -- ETAI
+Laura Bernhard - 20231606
+
+**Logistic Regression**
+Train accuracy: 0.679
+Test accuracy:  0.680
+Gap (train - test): -0.001
+
+**Decision Tree**
+Train accuracy: 0.705
+Test accuracy:  0.659
+Gap (train - test): +0.046
+
+Even though the decision tree model has higher train accuracy, the best model is logistic regression because the gap between train and test accuracy is lower, meaning less overfitting than with the decision tree model.
+
 
 This is the **starting point** for your semester project: a small but *complete* predictive pipeline -- every piece a real project needs (entry point, config, data loading, preprocessing, model, evaluation), just kept as simple as possible for now.
 
@@ -41,13 +55,6 @@ This table is updated after each practical class, so you can always see what cha
 
 You only need to do this once per machine.
 
-### macOS / Linux
-```bash
-python3 -m venv venv                 # creates an isolated Python environment in a folder called "venv"
-source venv/bin/activate             # activates it -- packages install here, not system-wide, and stay out of your other projects
-pip install -r requirements.txt      # installs the exact packages this project needs, into that environment
-```
-
 ### Windows -- PowerShell
 ```powershell
 python -m venv venv                  # creates an isolated Python environment in a folder called "venv"
@@ -59,25 +66,11 @@ If PowerShell blocks the activation script, run this once first:
 Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
 ```
 
-### Windows -- cmd.exe
-Same three steps as above, just with cmd's own activation command:
-```cmd
-python -m venv venv
-venv\Scripts\activate.bat
-pip install -r requirements.txt
-```
-
 Once the environment is active you'll see `(venv)` at the start of your prompt. To leave it later, run `deactivate` (same command on every OS).
 
 ### Every time after the first
 
 Creating the environment and installing packages only needs to happen once, ever. Every other time you sit down to work -- a new terminal window, the next practical class, tomorrow -- you don't repeat any of the steps above. From the project's root folder, you just need to:
-
-**macOS / Linux**
-```bash
-source venv/bin/activate
-python main.py
-```
 
 **Windows**
 ```powershell
