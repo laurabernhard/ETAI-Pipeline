@@ -19,3 +19,12 @@ model:
 
 output:
   results_dir: "results"   # each run's full report is saved here as a timestamped .txt file
+
+diagnostics:
+  candidate_predictors: ["sex", "race", "age_cat", "c_charge_degree", "score_text"]
+  validity_rules:
+    age: "18 <= age <= 100"
+    decile_score: "1 <= decile_score <= 10"
+    juv_fel_count: "juv_fel_count >= 0"
+    priors_count: "0 <= priors_count <= 60"
+  id_column: "id"
