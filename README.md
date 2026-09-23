@@ -1,14 +1,14 @@
 # Baseline Predictive Pipeline -- ETAI
 Laura Bernhard - 20231606
 
-**Logistic Regression**\
-Train accuracy: 0.679\
-Test accuracy:  0.680\
+**Logistic Regression**  
+Train accuracy: 0.679  
+Test accuracy:  0.680  
 Gap (train - test): -0.001
 
-**Decision Tree**\
-Train accuracy: 0.705\
-Test accuracy:  0.659\
+**Decision Tree**  
+Train accuracy: 0.705  
+Test accuracy:  0.659  
 Gap (train - test): +0.046
 
 Even though the decision tree model has higher train accuracy, the best model is logistic regression because the gap between train and test accuracy is lower, meaning less overfitting than with the decision tree model.
