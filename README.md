@@ -52,12 +52,22 @@ This table is updated after each practical class, so you can always see what cha
 | whole rows | 72 exact-duplicate rows, all sharing a repeated `id` | data entry | dropped, kept first occurrence |
 | `prior_offenses`, `age_in_months`, `juvenile_total` | redundant with other columns (correlation r=1.00, or -- for `juvenile_total` -- an exact sum caught only by VIF) | multicollinearity | dropped |
 
-**Encoder/scaler pair:** chosen by hand in `config.yaml` -- **target encoding** (compact, informative and **robust scaling** (median/IQR, so the few extreme counts don't set the scale). The alternatives (`onehot`/`ordinal`/`count`, `none`/`standard`/`minmax`) are one config change away.
+**Encoder/scaler pair:** chosen by hand in `config.yaml` -- **target encoding** (compact, informative) and **robust scaling** (median/IQR, so the few extreme counts don't set the scale). The alternatives (`onehot`/`ordinal`/`count`, `none`/`standard`/`minmax`) are one config change away.
+
+## Model evaluation
+How the pipeline evaluates models, and why (locked test set + stratified 5-fold CV).
+
+| Model | Holdout accuracy (W3) | CV accuracy (mean ± std) | CV train–val gap |
+|---|---|---|---|
+| Dummy | — | 0.549 ± 0.000 | 0.000 ± 0.000 |
+| Logistic regression | 0.680 | 0.672 ± 0.013 | + 0.003 ± 0.016 |
+| Decision tree | 0.660 | 0.646 ± 0.009 | + 0.045 ± 0.019 |
+| Random forest | — | 0.676 ± 0.014 | + 0.032 ± 0.018 |
 
 ## Best Model
-| Week | Logistic Regression | Decision Tree | Comparison between models |
+| Week(s) | Logistic Regression | Decision Tree | Comparison between models |
 |---|---|---|---|
-| 2 | Train accuracy: 0.679 <br> Test accuracy: 0.680 <br> Gap (train - test): -0.001 | Train accuracy: 0.705 <br> Test accuracy: 0.659 <br> Gap (train - test): +0.046 | Even though the decision tree model has higher train accuracy, the best model is logistic regression because the gap between train and test accuracy is lower, meaning less overfitting than with the decision tree model. |
+| 2/3 | Train accuracy: **0.679** <br> Test accuracy: **0.680** <br> Gap (train - test): **-0.001** | Train accuracy: **0.705** <br> Test accuracy: **0.659** <br> Gap (train - test): **+0.046** | Even though the decision tree model has higher train accuracy, the best model is logistic regression because the gap between train and test accuracy is lower, meaning less overfitting than with the decision tree model. |
 
 
 ## Environment setup

@@ -1,10 +1,14 @@
 """Model construction."""
+from sklearn.dummy import DummyClassifier
 from sklearn.linear_model import LogisticRegression
 from sklearn.tree import DecisionTreeClassifier
+from sklearn.ensemble import RandomForestClassifier
 
 _MODELS = {
+    "dummy": DummyClassifier,
     "logistic_regression": LogisticRegression,
     "decision_tree": DecisionTreeClassifier,
+    "random_forest": RandomForestClassifier,
 }
 
 
