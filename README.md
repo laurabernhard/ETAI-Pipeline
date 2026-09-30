@@ -67,8 +67,8 @@ How the pipeline evaluates models, and why (locked test set + stratified 5-fold 
 ## Best model
 | Week(s) | Dummy | Logistic Regression | Decision Tree | Random Forest | Comparison between models |
 |---|---|---|---|---|---|
-| 2/3 | — | Train: 0.679 <br> Test: 0.680 <br> Gap: -0.001 | Train: 0.705 <br> Test: 0.659 <br> Gap: +0.046 | — | Even though the decision tree model has higher train accuracy, the best model is logistic regression because the gap between train and test accuracy is lower, meaning less overfitting than with the decision tree model. |
-| 4 | Train: 0.549 ± 0.000 <br> Validation: 0.549 ± 0.000 <br> Gap: -0.000 ± 0.000 | Train: 0.675 ± 0.003 <br> Validation: 0.672 ± 0.013 <br> Gap: +0.003 ± 0.016 | Train: 0.691 ± 0.014 <br> Validation: 0.646 ± 0.009 <br> Gap: +0.045 ± 0.019 | Train: 0.708 ± 0.005 <br> Validation: 0.676 ± 0.014 <br> Gap: +0.032 ± 0.018 | ... |
+| 2/3 | — | Train: 0.679 <br> Test: 0.680 <br> Gap: -0.001 | Train: 0.705 <br> Test: 0.659 <br> Gap: +0.046 | — | Logistic Regression is the best model because it achieved the highest test accuracy while showing almost no train-test gap. |
+| 4 | Train: 0.549 ± 0.000 <br> Validation: 0.549 ± 0.000 <br> Gap: -0.000 ± 0.000 | Train: 0.675 ± 0.003 <br> Validation: 0.672 ± 0.013 <br> Gap: +0.003 ± 0.016 | Train: 0.691 ± 0.014 <br> Validation: 0.646 ± 0.009 <br> Gap: +0.045 ± 0.019 | Train: 0.708 ± 0.005 <br> Validation: 0.676 ± 0.014 <br> Gap: +0.032 ± 0.018 | Random Forest achieved the highest mean cross-validation, but Logistic Regression achieved very similar predictive performance with substantially less overfitting (smaller train-val gap). Therefore, Logistic Regression is considered the best model so far. |
 
 
 ## Environment setup
