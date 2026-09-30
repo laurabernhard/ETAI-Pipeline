@@ -62,6 +62,7 @@ This table is updated after each practical class, so you can always see what cha
 | Gap (train - test) | -0.001 | +0.046 |
 
 | Week | Best Model | Comparison between models |
+|---|---|---|
 | 2 | Decision Tree | Even though the decision tree model has higher train accuracy, the best model is logistic regression because the gap between train and test accuracy is lower, meaning less overfitting than with the decision tree model. |
 
 
