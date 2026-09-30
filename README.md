@@ -1,32 +1,6 @@
 # Baseline Predictive Pipeline -- ETAI
-
 # Laura Bernhard - 20231606
----
 
-         
-For each column that needed a decision, one line: what was wrong, what mechanism (MCAR/MNAR/
-domain rule/duplicate), what was done about it, and why. This is your `verdict table`, in prose --
-whoever reads your README next (including future-you) shouldn't have to re-derive it from the code.
-
-## Best Model
-Comparison between your models, results and current best model
-
-
-
-**Logistic Regression**  
-Train accuracy: 0.679  
-Test accuracy:  0.680  
-Gap (train - test): -0.001
-
-**Decision Tree**  
-Train accuracy: 0.705  
-Test accuracy:  0.659  
-Gap (train - test): +0.046
-
-Even though the decision tree model has higher train accuracy, the best model is logistic regression because the gap between train and test accuracy is lower, meaning less overfitting than with the decision tree model.
-
-
----
 
 ## Overview
 This is the **starting point** for your semester project: a small but *complete* predictive pipeline -- every piece a real project needs (entry point, config, data loading, preprocessing, model, evaluation), just kept as simple as possible for now.
@@ -35,9 +9,7 @@ The task: predict two-year recidivism using ProPublica's COMPAS
 dataset -- the data behind a real 2016 investigation into a risk-
 assessment algorithm actually used by US courts to help inform bail and sentencing decisions. See `data/README.md` for the full problem description and a complete data dictionary before you start.
 
-It has some **deliberately weak spots**. Part of your work this
-semester is finding them and making them better -- see the pipeline progress table below, which tracks what changes and why as the weeks
-go on.
+It has some **deliberately weak spots**. Part of your work this semester is finding them and making them better -- see the pipeline progress table below, which tracks what changes and why as the weeks go on.
 
 ## Project structure
 
@@ -69,9 +41,33 @@ This table is updated after each practical class, so you can always see what cha
 | 4 | Preprocessing inside the pipeline + cross-validation -- evaluating a model honestly | A **locked final test set** (20%, stratified, seed 42) is set aside by `split_dev_test()` (replaces `split_train_test()`) and never scored; models are now judged by **stratified 5-fold cross-validation** of the whole pipeline (preprocessing + model) on the development set, reported per fold with mean ± std and the train-validation gap; the classification report and fairness check now use out-of-fold predictions; target encoding switched to scikit-learn's cross-fitting `TargetEncoder` (a row's own label never leaks into its own encoding), encoder/scaler set by hand in `config.yaml` (target encoding + robust scaling, reasons in the comments); **two fixes** in `clean_dataset()`: genuine `NaN`s in categorical columns were being turned into the string `"nan"` (a fake category), so 229 `c_charge_degree` gaps were never imputed or flagged -- fixed in `config.yaml` alone: `"nan"` added to `diagnostics.placeholder_tokens` (the category cleanup's last step turns listed tokens into `NaN`, after its text conversion); and it no longer drops rows -- de-duplication moved to a separate, training-only `drop_duplicate_rows()` (run before the dev/test split), so the same cleaning can run on new data where every row needs a prediction; `src/data_diagnostics.py` removed -- its one cleaning function (`flag_invalid_values`) moved into `preprocessing.py`, and the EDA-only checks (missingness test, duplicate counts) live in the EDA notebooks, not in every pipeline run; `dummy` (majority-class) model added as the floor to beat, and `random_forest` registered (sensible defaults, untuned); the final model is refit on the whole development set after CV; `config.yaml` gains `test_set` and `cv` sections -- see "Model evaluation" below |
 
 ## Preprocessing decisions
+| Column(s) | Issue found | Mechanism | What was done |
+|---|---|---|---|
+| `age` | 2.0% missing | MCAR | median impute, no indicator needed |
+| `juv_fel_count` | 3.0% missing | MCAR | median impute, no indicator needed |
+| `priors_count` | ~7% missing (incl. placeholder tokens) | MNAR -- tied to `age_cat` | median impute + `priors_count_was_missing` flag |
+| `c_charge_degree` | 3.2% missing | MNAR -- tied to `age_cat` | mode impute + `c_charge_degree_was_missing` flag |
+| `race` | ~1% missing (placeholder tokens) | MCAR | mode impute, no indicator (excluded from model features anyway) |
+| `sex` | ~1.5% missing (incl. placeholder tokens) | MCAR | mode impute, no indicator needed |
+| `age`, `decile_score`, `juv_fel_count`, `priors_count` | invalid values (out-of-range or negative) | domain rule | converted to `NaN` before imputation |
+| `sex` / `race` / `c_charge_degree` / `score_text` | inconsistent category spelling (casing, whitespace, abbreviations) | data entry | canonicalized to one spelling per category |
+| whole rows | 72 exact-duplicate rows, all sharing a repeated `id` | data entry | dropped, kept first occurrence |
+| `prior_offenses`, `age_in_months`, `juvenile_total` | redundant with other columns (correlation r=1.00, or -- for `juvenile_total` -- an exact sum caught only by VIF) | multicollinearity | dropped |
+
+**Encoder/scaler pair:** chosen by hand in `config.yaml` -- **target encoding** (compact, informative and **robust scaling** (median/IQR, so the few extreme counts don't set the scale). The alternatives (`onehot`/`ordinal`/`count`, `none`/`standard`/`minmax`) are one config change away.
+
+## Best Model
+|| Logistic Regression | Decision Tree |
+|---|---|---|
+| Train accuracy | 0.679 | 0.705 |
+| Test accuracy | 0.680 | 0.659 |
+| Gap (train - test) | -0.001 | +0.046 |
+
+| Week | Best Model | Comparison between models |
+| 2 | Decision Tree | Even though the decision tree model has higher train accuracy, the best model is logistic regression because the gap between train and test accuracy is lower, meaning less overfitting than with the decision tree model. |
+
 
 ## Environment setup
-
 You only need to do this once per machine.
 
 ### Windows -- PowerShell
