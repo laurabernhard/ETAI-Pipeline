@@ -62,7 +62,7 @@ preprocessing:
     categorical_strategy: "most_frequent"   # applies to sex, age_cat, c_charge_degree
 
 model:
-  type: "decision_tree"     # options: "dummy" | "logistic_regression" | "decision_tree" | "random_forest"
+  type: "random_forest"     # options: "dummy" | "logistic_regression" | "decision_tree" | "random_forest"
   params:
     random_state: 42
 
@@ -75,6 +75,14 @@ tuning:
   search_spaces:
     decision_tree:
       model__max_depth: {type: int, low: 1, high: 20}
+      model__min_samples_leaf: {type: int, low: 1, high: 200, log: true}
+      model__criterion: {type: categorical, choices: ["gini", "entropy"]}
+    logistic_regression:
+      model__C: {type: float, low: 0.001, high: 100, log: true}
+      model__penalty: {type: categorical, choices: ["l2"]}
+    random_forest:
+      model__n_estimators: {type: int, low: 10, high: 200}
+      model__max_depth: {type: int, low: 2, high: 20}
       model__min_samples_leaf: {type: int, low: 1, high: 200, log: true}
       model__criterion: {type: categorical, choices: ["gini", "entropy"]}
 

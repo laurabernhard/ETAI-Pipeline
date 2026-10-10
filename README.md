@@ -75,12 +75,13 @@ How the pipeline tunes (Optuna, search space, number of trials, inner folds) and
 
 | Model | Default: CV mean ± std | Tuned: nested CV mean ± std | Tuning score (best trial) | Optimism | Chosen hyperparameters |
 |---|---|---|---|---|---|
-| Decision tree | 0.610 ± 0.018 | 0.672 ± 0.017 | 0.679 | +0.002 | max_depth=6,<\br>min_samples_leaf=101,<\br>criterion=gini |
-| Logistic regression | ... | ... | ... | ... | ... |
-| Random forest | ... | ... | ... | ... | ... |
+| Decision tree | 0.610 ± 0.018 | 0.672 ± 0.017 | 0.679 | +0.002 | max_depth=6, min_samples_leaf=101, criterion=gini |
+| Logistic regression | 0.672 ± 0.013 | 0.671 ± 0.015 | 0.677 | +0.004 | C=0.075, penalty=l2 |
+| Random forest | 0.647 ± 0.016 | 0.681 ± 0.016 | 0.684 | -0.000 | n_estimators=58, max_depth=7, min_samples_leaf=1, criterion=entropy |
 
-3–5 sentences: which models gained from tuning, and is the gain larger than the fold-to-fold std?
-Did tuning change which model is best? Which number would you report for your best model, and why?
+Hyperparameter tuning benefited the tree-based models the most. The decision tree improved from 0.610 ± 0.018 to 0.672 ± 0.017 (+0.062), and the random forest improved from 0.647 ± 0.016 to 0.681 ± 0.016 (+0.034). In both cases, the improvement was larger than the fold-to-fold standard deviation, suggesting a meaningful gain. In contrast, logistic regression changed from 0.672 ± 0.013 to 0.671 ± 0.015, indicating that tuning provided no practical benefit.
+
+Tuning changed which model was best. Before tuning, logistic regression had the highest mean CV accuracy (0.672), whereas after tuning, the random forest achieved the highest nested CV accuracy (0.681). For the final report, I would report 0.681 ± 0.016, the random forest's nested cross-validation score, because it is the honest performance estimate from nested CV and is not affected by the optimistic bias of selecting the best hyperparameters on the same data used for evaluation.
 
 
 ## Environment setup
