@@ -64,10 +64,9 @@ It has some **deliberately weak spots**. Part of your work this semester is find
 |---|---|---|---|---|---|
 | 2/3 | — | Train: 0.679 <br> Test: 0.680 <br> Gap: -0.001 | Train: 0.705 <br> Test: 0.659 <br> Gap: +0.046 | — | Logistic Regression is the best model because it achieved the highest test accuracy while showing almost no train-test gap. |
 | 4 | Train: 0.549 ± 0.000 <br> Validation: 0.549 ± 0.000 <br> Gap: -0.000 ± 0.000 | Train: 0.675 ± 0.003 <br> Validation: 0.672 ± 0.013 <br> Gap: +0.003 ± 0.016 | Train: 0.691 ± 0.014 <br> Validation: 0.646 ± 0.009 <br> Gap: +0.045 ± 0.019 | Train: 0.708 ± 0.005 <br> Validation: 0.676 ± 0.014 <br> Gap: +0.032 ± 0.018 | Random Forest achieved the highest mean cross-validation, but Logistic Regression achieved very similar predictive performance with substantially less overfitting (smaller train-val gap). Therefore, Logistic Regression is considered the best model so far. |
+| 5 | — | Train: 0.676 ± 0.003 <br> Validation: 0.671 ± 0.015 <br> Gap: +0.005 ± 0.017 | Train: 0.685 ± 0.007 <br> Validation: 0.672 ± 0.017 <br> Gap: +0.013 ± 0.023 | Train: 0.691 ± 0.004 <br> Validation: 0.681 ± 0.016 <br> Gap: +0.009 ± 0.019 | After hyperparameter tuning, Random Forest achieved the highest nested cross-validation accuracy (0.681 ± 0.016) while maintaining a very small train-validation gap (+0.009). Decision Tree benefited substantially from tuning, while Logistic Regression showed almost no improvement. Therefore, the tuned Random Forest is selected as the final best model. |
 
 ### Hyperparameter tuning
-How the pipeline tunes (Optuna, search space, number of trials, inner folds) and why it doesn't leak.
-
 | Model | Default: CV mean ± std | Tuned: nested CV mean ± std | Tuning score (best trial) | Optimism | Chosen hyperparameters |
 |---|---|---|---|---|---|
 | Decision tree | 0.610 ± 0.018 | 0.672 ± 0.017 | 0.679 | +0.002 | max_depth=6, min_samples_leaf=101, criterion=gini |
