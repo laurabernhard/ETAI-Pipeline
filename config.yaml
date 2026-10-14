@@ -62,7 +62,7 @@ preprocessing:
     categorical_strategy: "most_frequent"   # applies to sex, age_cat, c_charge_degree
 
 model:
-  type: "random_forest"     # options: "dummy" | "logistic_regression" | "decision_tree" | "random_forest"
+  type: "random_forest"     # options: "dummy" | "logistic_regression" | "decision_tree" | "random_forest" | "oblique_random_forest" | "adaboost"
   params:
     random_state: 42
 
@@ -81,10 +81,17 @@ tuning:
       model__C: {type: float, low: 0.001, high: 100, log: true}
       model__penalty: {type: categorical, choices: ["l2"]}
     random_forest:
-      model__n_estimators: {type: int, low: 10, high: 200}
-      model__max_depth: {type: int, low: 2, high: 20}
+      model__max_depth: {type: int, low: 2, high: 30}
       model__min_samples_leaf: {type: int, low: 1, high: 200, log: true}
-      model__criterion: {type: categorical, choices: ["gini", "entropy"]}
+      model__max_features: {type: categorical, choices: ["sqrt", 0.5, 1.0]}
+    oblique_random_forest:
+      model__estimator__tree__max_depth: {type: int, low: 2, high: 30}
+      model__estimator__tree__min_samples_leaf: {type: int, low: 1, high: 200, log: true}
+      model__estimator__project__n_components: {type: int, low: 3, high: 10}   # <= number of features
+    adaboost:
+      model__estimator__max_depth: {type: int, low: 1, high: 8}
+      model__n_estimators: {type: int, low: 25, high: 400, log: true}
+      model__learning_rate: {type: float, low: 0.01, high: 1.0, log: true}
 
 output:
   results_dir: "results"   # each run's full report is saved here as a timestamped .txt file
