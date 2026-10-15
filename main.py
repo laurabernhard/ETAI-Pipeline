@@ -17,7 +17,7 @@ import yaml
 from sklearn.model_selection import StratifiedKFold
 
 from src.data import load_data
-from src.preprocessing import clean_dataset, drop_duplicate_rows, split_features_target, split_dev_test
+from src.preprocessing import clean_dataset, drop_duplicate_rows, split_features_target, split_dev_test, add_engineered_features
 from src.model import build_pipeline
 from src.tuning import tune_pipeline, nested_cross_validate, tuning_report
 from src.evaluate import cross_validate_pipeline, cv_report, oof_classification_report, fairness_report
@@ -41,8 +41,10 @@ def main():
     df_clean = clean_dataset(df_raw, config["diagnostics"])          # row-preserving: also safe for new data
     df_clean = drop_duplicate_rows(df_clean, config["diagnostics"].get("id_column"))    # training data only
 
+    df_preproc = add_engineered_features(df_clean)
+
     mnar_sources = config["preprocessing"].get("mnar_indicator_sources", [])
-    X, y, extras = split_features_target(df_clean, config["data"], mnar_sources)
+    X, y, extras = split_features_target(df_preproc, config["data"], mnar_sources)
 
     X_dev, X_test, y_dev, y_test, extras_dev, extras_test = split_dev_test(
         X, y, extras,

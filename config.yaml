@@ -62,7 +62,7 @@ preprocessing:
     categorical_strategy: "most_frequent"   # applies to sex, age_cat, c_charge_degree
 
 model:
-  type: "random_forest"     # options: "dummy" | "logistic_regression" | "decision_tree" | "random_forest" | "oblique_random_forest" | "adaboost"
+  type: "adaboost"     # options: "dummy" | "logistic_regression" | "decision_tree" | "random_forest" | "oblique_random_forest" | "adaboost"
   params:
     random_state: 42
 

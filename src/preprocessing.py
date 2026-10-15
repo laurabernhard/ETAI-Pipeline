@@ -194,3 +194,15 @@ def build_preprocessor(preprocessing_config: dict) -> ColumnTransformer:
         ("categorical", categorical_pipeline, categorical_features),
         ("indicators", "passthrough", indicator_cols),
     ])
+
+
+def add_engineered_features(df: pd.DataFrame) -> pd.DataFrame:
+    out = df.copy()
+    out["priors_per_adult_year"] = out["priors_count"] / (out["age"] - 17).clip(lower=1)   # NaN stays NaN -> imputed later
+    out["priors_log"] = np.log1p(out["priors_count"])
+    out["juvenile_total"] = out["juv_fel_count"] + out["juv_misd_count"] + out["juv_other_count"]
+    out["total_history_per_year"] = (out["priors_count"] + out["juvenile_total"]) / (out["age"] - 17).clip(lower=1)
+    out["young_flag"] = (out["age"] < 25).astype(int)
+    out["young_x_priors"] = out["young_flag"] * out["priors_log"]
+    out["early_onset"] = ((out["juvenile_total"] > 0) & (out["priors_count"] > 0)).astype(int)
+    return out
