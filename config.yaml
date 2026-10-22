@@ -63,24 +63,29 @@ preprocessing:
     categorical_strategy: "most_frequent"   # applies to sex, age_cat, c_charge_degree
 
 model:
-  type: "logistic_regression"     # options: "dummy" | "logistic_regression" | "naive_bayes" | "decision_tree" | "random_forest" | "oblique_random_forest" | "adaboost" | "gradient_boosting" | "hist_gradient_boosting"
+  type: "hist_gradient_boosting"     # options: "dummy" | "logistic_regression" | "naive_bayes" | "decision_tree" | "random_forest" | "oblique_random_forest" | "adaboost" | "gradient_boosting" | "hist_gradient_boosting"
   params:
-    # {}
   # Other models' params, to swap in. class_weight "balanced" weights each class by 1 / its frequency
   # (GradientBoostingClassifier and GaussianNB have no class_weight).
   # logistic_regression:
-    {max_iter: 2000, class_weight: balanced}
-  # naive_bayes:            {}
-  # decision_tree:          {random_state: 42, class_weight: balanced}
-  # random_forest:          {n_estimators: 200, random_state: 42, n_jobs: -1, class_weight: balanced}
-  # oblique_random_forest:  {n_estimators: 200, n_components: 10, random_state: 42, n_jobs: -1}
-  # adaboost:               {max_depth: 1, n_estimators: 200, learning_rate: 1.0, random_state: 42}
-  # hist_gradient_boosting: {random_state: 42, class_weight: balanced}
+    # {max_iter: 2000, class_weight: balanced}
+  # naive_bayes / gradient_boosting:
+    # {}
+  # decision_tree:
+    # {random_state: 42, class_weight: balanced}
+  # random_forest:
+    # {n_estimators: 200, random_state: 42, n_jobs: -1, class_weight: balanced}
+  # oblique_random_forest:
+    # {n_estimators: 200, n_components: 10, random_state: 42, n_jobs: -1}
+  # adaboost:
+    # {max_depth: 1, n_estimators: 200, learning_rate: 1.0, random_state: 42}
+  # hist_gradient_boosting:
+    {random_state: 42, class_weight: balanced}
 
 
 tuning:
   enabled: true
-  n_trials: 30
+  n_trials: 10
   n_splits: 5                                       # folds that score each candidate
   random_state: 42                                  # seeds the sampler and those folds
   # Keys are Pipeline parameter names. Types: int / float (low, high, log) or categorical (choices).
