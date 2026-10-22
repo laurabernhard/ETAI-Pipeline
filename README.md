@@ -90,8 +90,10 @@ Tuning changed which model was best. Before tuning, logistic regression had the 
 
 Since the differences between the tuned models (0.671 to 0.682) are smaller than the fold-to-fold std (about 0.013 to 0.017), the lead of any single model is not meaningful, but I would choose AdaBoost: it ties the oblique random forest at 0.682 and has the best untuned score (0.668), a small gap (+0.004) and zero optimism, so its estimate is the most trustworthy. The chosen hyperparameters fit how each model works: the single decision tree needs heavy regularisation (depth 6, 101 samples per leaf) because it has high variance, the random forest can afford deeper trees (depth 11) since averaging reduces variance, the oblique forest uses shallow trees (depth 5) because each split is already a linear combination of features, and AdaBoost uses shallow weak learners (depth 4) with a low learning rate (0.025) to avoid fitting noise. I would report AdaBoost's nested CV score of 0.682 ± 0.017 rather than the 0.684 tuning score, since the latter is the best of 30 trials and therefore optimistic. Once the model is chosen, the locked test set should be evaluated once for the final number.
 
-### Scoreboard
-| Model | f1 score | std | untuned | floor |
+## Scoreboard
+Selection metric: **F1** (mean over 5 stratified outer folds; "Tuned" = nested CV with 10 Optuna trials; "Untuned" = config.yaml defaults on the same folds; "Floor" = dummy classifier)
+
+| Model | Tuned (nested CV): F1 | std | Untuned | Floor |
 |---|---|---|---|---|
 | random_forest | 0.641 | 0.015 | 0.608 | 0.000 |
 | hist_gradient_boosting | 0.641 | 0.016 | 0.630 | 0.000 |
