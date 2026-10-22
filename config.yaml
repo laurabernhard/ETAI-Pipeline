@@ -63,8 +63,9 @@ preprocessing:
     categorical_strategy: "most_frequent"   # applies to sex, age_cat, c_charge_degree
 
 model:
-  type: "dummy"     # options: "dummy" | "logistic_regression" | "naive_bayes" | "decision_tree" | "random_forest" | "oblique_random_forest" | "adaboost" | "gradient_boosting" | "hist_gradient_boosting"
+  type: "oblique_random_forest"     # options: "dummy" | "logistic_regression" | "naive_bayes" | "decision_tree" | "random_forest" | "oblique_random_forest" | "adaboost" | "gradient_boosting" | "hist_gradient_boosting"
   params:
+    {}
   # Other models' params, to swap in. class_weight "balanced" weights each class by 1 / its frequency
   # (GradientBoostingClassifier and GaussianNB have no class_weight).
   # logistic_regression:    {max_iter: 2000, class_weight: balanced}

@@ -51,6 +51,7 @@ _MODELS = {
 
 
 def build_model(model_config: dict):
+    """Builds the model named by `model_config["type"]` with `model_config["params"]`."""
     model_type = model_config["type"]
     params = model_config.get("params", {})
 
