@@ -68,7 +68,7 @@ It has some **deliberately weak spots**. Part of your work this semester is find
 | 4 | Train: 0.549 ± 0.000 <br> Validation: 0.549 ± 0.000 <br> Gap: -0.000 ± 0.000 | Train: 0.675 ± 0.003 <br> Validation: 0.672 ± 0.013 <br> Gap: +0.003 ± 0.016 | Train: 0.691 ± 0.014 <br> Validation: 0.646 ± 0.009 <br> Gap: +0.045 ± 0.019 | Train: 0.708 ± 0.005 <br> Validation: 0.676 ± 0.014 <br> Gap: +0.032 ± 0.018 | Random Forest achieved the highest mean cross-validation, but Logistic Regression achieved very similar predictive performance with substantially less overfitting (smaller train-val gap). Therefore, Logistic Regression is considered the best model so far. |
 | 5 | — | Train: 0.676 ± 0.003 <br> Validation: 0.671 ± 0.015 <br> Gap: +0.005 ± 0.017 | Train: 0.685 ± 0.007 <br> Validation: 0.672 ± 0.017 <br> Gap: +0.013 ± 0.023 | Train: 0.691 ± 0.004 <br> Validation: 0.681 ± 0.016 <br> Gap: +0.009 ± 0.019 | After hyperparameter tuning, Random Forest achieved the highest nested cross-validation accuracy (0.681 ± 0.016) while maintaining a very small train-validation gap (+0.009). Decision Tree benefited substantially from tuning, while Logistic Regression showed almost no improvement. Therefore, the tuned Random Forest is selected as the final best model. |
 
-### Hyperparameter tuning
+## Hyperparameter tuning
 | Model | Default: CV mean ± std | Tuned: nested CV mean ± std | Tuning score (best trial) | Optimism | Chosen hyperparameters |
 |---|---|---|---|---|---|
 | Decision tree | 0.610 ± 0.018 | 0.672 ± 0.017 | 0.679 | +0.002 | max_depth=6, min_samples_leaf=101, criterion=gini |
@@ -79,7 +79,7 @@ Hyperparameter tuning benefited the tree-based models the most. The decision tre
 
 Tuning changed which model was best. Before tuning, logistic regression had the highest mean CV accuracy (0.672), whereas after tuning, the random forest achieved the highest nested CV accuracy (0.681). For the final report, I would report 0.681 ± 0.016, the random forest's nested cross-validation score, because it is the honest performance estimate from nested CV and is not affected by the optimistic bias of selecting the best hyperparameters on the same data used for evaluation.
 
-### Ensembles
+## Ensembles
 | Model | Default: CV mean ± std (gap) | Tuned: nested CV mean ± std (gap) | Tuning score (best trial) | Chosen hyperparameters |
 |---|---|---|---|---|
 | Logistic regression | 0.672 ± 0.013 (+0.003) | — | — | — |
