@@ -63,9 +63,8 @@ preprocessing:
     categorical_strategy: "most_frequent"   # applies to sex, age_cat, c_charge_degree
 
 model:
-  type: "gradient_boosting"     # options: "dummy" | "logistic_regression" | "decision_tree" | "random_forest" | "oblique_random_forest" | "adaboost" | "gradient_boosting" | "hist_gradient_boosting"
+  type: "dummy"     # options: "dummy" | "logistic_regression" | "naive_bayes" | "decision_tree" | "random_forest" | "oblique_random_forest" | "adaboost" | "gradient_boosting" | "hist_gradient_boosting"
   params:
-    random_state: 42
   # Other models' params, to swap in. class_weight "balanced" weights each class by 1 / its frequency
   # (GradientBoostingClassifier and GaussianNB have no class_weight).
   # logistic_regression:    {max_iter: 2000, class_weight: balanced}
@@ -79,7 +78,7 @@ model:
 
 tuning:
   enabled: true
-  n_trials: 30
+  n_trials: 5
   n_splits: 5                                       # folds that score each candidate
   random_state: 42                                  # seeds the sampler and those folds
   # Keys are Pipeline parameter names. Types: int / float (low, high, log) or categorical (choices).
@@ -115,7 +114,10 @@ tuning:
       model__max_leaf_nodes: {type: int, low: 2, high: 63, log: true}
       model__min_samples_leaf: {type: int, low: 5, high: 200, log: true}
       model__l2_regularization: {type: float, low: 0.000001, high: 10.0, log: true}
+    naive_bayes:
+      model__var_smoothing: {type: float, low: 0.000000000001, high: 0.1, log: true}
 
 output:
   results_dir: "results"   # each run's full report is saved here as a timestamped .txt file
+  score_board: "results/runs.csv"
 
