@@ -16,7 +16,7 @@ cv:
   shuffle: true
   random_state: 42
   metrics: ["accuracy", "balanced_accuracy", "precision", "recall", "f1", "fbeta_2", "roc_auc", "average_precision"]
-  selection_metric: "roc_auc"                       # one of metrics: what tuning maximises and runs are ranked by
+  selection_metric: "f1"                       # one of metrics: what tuning maximises and runs are ranked by
   n_jobs: 1             # folds fitted in parallel; -1 = all cores (only pays off for slow models, e.g. random forest)
 
 diagnostics:
