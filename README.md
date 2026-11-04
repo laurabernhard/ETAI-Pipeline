@@ -36,6 +36,7 @@ It has some **deliberately weak spots**. Part of your work this semester is find
 | 5 | Hyperparameter tuning without leakage | New `src/tuning.py`: hyperparameters are tuned with **Optuna** (seeded TPE sampler) on the development set only -- every candidate is scored by stratified 5-fold CV of the **whole** pipeline (preprocessing re-fit in every fold of every trial), on the same folds for every candidate; the tuning procedure is estimated honestly by **nested cross-validation** (the tuning repeated inside each outer CV fold, scored on the outer fold it never saw), whose out-of-fold predictions now feed the classification report and fairness check; the reported "best trial" score is shown next to the nested one as an optimism check; the final model is the tuned pipeline refit on all development rows; `build_pipeline()` in `src/model.py` now builds the preprocessing + model `Pipeline` (one place to add a learned step later); `config.yaml` gains a `tuning` section (on/off, trials, inner folds, seed, one search space per model type) and the model becomes the decision tree; `optuna` added to `requirements.txt`. The locked test set is still untouched -- see "Hyperparameter tuning" below |
 | 6 | Ensembles in depth: random forest, oblique random forest, AdaBoost | Two new model types in `src/model.py`: `oblique_random_forest` (a forest of oblique trees built from scikit-learn parts -- every tree splits on its own random sparse linear combinations of the features, via `SparseRandomProjection` inside `BaggingClassifier`) and `adaboost` (AdaBoost over decision trees of a chosen depth; stumps by default), both registered in `_MODELS`; the random forest is now the model `main.py` runs (200 trees, all CPU cores); `config.yaml` gains search spaces for the three ensembles -- the forests tune tree size (`max_depth`, `min_samples_leaf`) and decorrelation (`max_features` / number of combinations) but not the number of trees, AdaBoost tunes its base trees' depth, its number of rounds and its learning rate; `corrected_paired_test()` in `src/evaluate.py` compares two models scored on the same folds (Nadeau & Bengio's corrected paired t-test), so a "winner" is only called when the difference is bigger than fold-to-fold noise; `scipy` listed in `requirements.txt` (it already came with scikit-learn, so nothing new to install) -- see "Ensembles" below |
 | 7 |	Gradient boosting + evaluating with probabilities	| Three new model types in `src/model.py`: `gradient_boosting` (scikit-learn's `GradientBoostingClassifier`: each shallow tree fits the gradient of the log-loss left by the trees before it), `hist_gradient_boosting` (the same idea on binned features: much faster on large data, and it handles missing values itself) and `naive_bayes` (`GaussianNB`, a fast probabilistic baseline); gradient boosting is now the model main.py runs, each with its search space in `config.yaml`; evaluation now reports **several metrics** (accuracy, balanced accuracy, precision, recall, F1, F-beta, ROC-AUC, PR-AUC) and one **selection metric** (`cv.selection_metric`, F1) that tuning maximises and runs are ranked by; out-of-fold **probabilities** (not just labels) feed the reports, with a confusion matrix; class_weight: balanced in the commented examples of the models that support it; new `save_scores()` in `src/results.py`: every run adds a row to `results/runs.csv` (the model and its settings, the score on each fold, the no-model floor and the untuned score on the same folds), so any two runs on the same data and folds can be compared with `corrected_paired_test()`; the printed output was reorganised to be easier to read, with the full tables in the results file -- see "Model evaluation" below |
+| 8 | XGBoost + feature selection | New model type `xgboost` (`XGBClassifier`, from the `xgboost` package: gradient boosting with extra regularisation, multi-threaded, handles missing values itself), now the model `main.py` runs, with its search space in `config.yaml`; **feature selection** as a learned step of the Pipeline: new `VoteSelector` class in `src/model.py` (a random forest, gradient boosting and an L1 logistic regression vote; features with at least `min_votes` votes are kept), placed between `"prep"` and `"model"` by `build_pipeline()` when the new `feature_selection` section of `config.yaml` switches it on, so it is re-fitted on the training rows of every fold (never on the rows it is scored on); with tuning on, `select__min_votes` is tuned with the model and assessed by nested CV; the pipeline caches fitted preprocessing and selection steps during a run (`Pipeline(memory=...)`, a temporary folder deleted at the end), so tuning doesn't refit them in every trial; the final model's kept features are printed, and the scoreboard records the selection setting -- see "Feature selection" below |
 
 ## Preprocessing decisions
 | Column(s) | Issue found | Mechanism | What was done |
@@ -105,6 +106,7 @@ Selection metric: **F1** (mean over the 5 stratified outer folds; "Tuned" = nest
 | Naive bayes | 0.404 | 0.013 | 0.403 | 0.000 |
 
 <br>
+
 For reference, the same models with ROC-AUC as the selection metric (threshold-free; floor 0.500):
 
 | Model | Tuned (nested CV): ROC-AUC | std | Untuned | Floor |
@@ -126,6 +128,26 @@ Its limitation is that F1 is computed at a single 0.5 threshold, so it depends o
 Tuning helped most the models that overfit with their default settings: the decision tree (+0.058), random forest (+0.034), oblique random forest (+0.025) and AdaBoost (+0.022). The two boosters gained little (+0.008 gradient boosting, +0.011 HistGradientBoosting), and logistic regression and Naive Bayes did not change (-0.001 and +0.001).
 
 Random forest and HistGradientBoosting are tied at the top (0.641; corrected paired t-test p = 0.891). I compared the random forest with each other model using the corrected paired t-test (Nadeau & Bengio) on the five fold scores in `results/runs.csv`, which are paired because every run uses the same folds. It is clearly better than Naive Bayes (p < 0.001) and better than the oblique random forest (+0.025, 5/5 folds, p = 0.011) and logistic regression (+0.009, 5/5 folds, p = 0.025), but I cannot separate it from the decision tree (p = 0.51), AdaBoost (p = 0.09) or gradient boosting (p = 0.09). With seven comparisons, p-values around 0.01-0.03 are only weak evidence, so the honest summary is that the tuned models are mostly within noise of each other (fold std 0.009-0.030) and only Naive Bayes is clearly worse.
+
+## Feature Selection
+**Tuned** XGBoost run twice on the same data and the same folds, with feature selection off and on (`feature_selection.enabled` in `config.yaml`). When it is on, `select__min_votes` is tuned together with the model, and both scores are nested-CV estimates (selection metric: F1).
+
+| Model | Feature Selection | Nested CV F1 (mean ± std) | Untuned F1 | Features kept |
+|---|---|---|---|---|
+| XGBoost | off | 0.623 ± 0.018 | 0.613 | all 10 |
+| XGBoost | `VoteSelector`, `min_votes`=1 | 0.615 ± 0.011 | 0.600 | 2 of 10: `age`, `priors_count` |
+
+<br>
+
+Corrected paired t-test (Nadeau & Bengio, 5 folds, `compare_runs.py`), reference = no selection:
+
+| Difference (off - selection) | Folds won by "off" | t | p-value | p < 0.05 |
+|---|---|---|---|---|
+| +0.0084 | 4/5 | 0.81 | 0.462 | no |
+
+Tuned XGBoost achieved an F1 score of 0.623 without feature selection and 0.615 with it. A corrected paired test revealed no statistically significant difference between the two (diference=+0.008, p=0.462). However, with only 5 folds (4 degrees of freedom), the test is underpowered and can only detect large differences, therefore, the proper interpretation is "no measurable difference" rather than "identical".
+Feature selection proved extremely aggressive: only `age` and `priors_count` received any vote from the three models, so the final model uses just 2 of the 10 inputs, even with `min_votes` = 1. This much smaller model performs within noise of the full one, though it scored lower in 4 of the 5 folds.
+I would keep selection on, since a 2-feature model is far easier to explain and deploy, and no loss in performance could be detected. If maximizing F1 was the only goal, I would turn it off, since 5 folds are too few to rule out a small drop.
 
 
 ## Environment setup

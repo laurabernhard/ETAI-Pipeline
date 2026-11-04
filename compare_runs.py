@@ -31,10 +31,12 @@ def main():
 
     runs = pd.read_csv(path, dtype={"run": str})
     runs = runs[runs["metric"] == metric]                    # only runs scored on this metric
-    runs = runs.sort_values("run").drop_duplicates("model", keep="last")   # latest run of each model
+    runs = runs.sort_values("run").drop_duplicates(["model", "tuned", "feature_selection"], keep="last")   # latest run of each model
+    runs["label"] = (runs["model"] + " | tuned=" + runs["tuned"].astype(str)
+                     + " | feature_selection=" + runs["feature_selection"].astype(str))
 
     fold_cols = [f"fold_{i}" for i in range(1, k + 1)]
-    scores = runs.set_index("model")[fold_cols]
+    scores = runs.set_index("label")[fold_cols]
     means = scores.mean(axis=1)
     best = args.best or means.idxmax()
     ratio = 1 / (k - 1)                                      # validation rows / training rows
