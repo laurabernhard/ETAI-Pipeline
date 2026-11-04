@@ -5,16 +5,18 @@ Run with:
     python main.py
 
 This orchestrates the full pipeline:
-    load config -> load data -> diagnose/clean (week 3) -> drop duplicate rows (training only, week 4)
-    -> split features/target
-    -> set the final test set aside, locked (week 4)
-    -> stratified k-fold cross-validation of preprocessing + model on the development set (week 4)
-    -> out-of-fold classification report + fairness check
-    -> refit the final model on the whole development set -> save results
+    load config -> load and clean data -> drop duplicate rows (training only) -> features/target
+    -> lock the test set -> cross-validate the pipeline (preprocessing, feature selection if enabled,
+    model) on the development set (several metrics, and the no-model floor on the same folds)
+    -> [if tuning is enabled: nested CV of the tuning procedure, then tuning on all development rows]
+    -> out-of-fold reports -> refit on all development rows -> scoreboard + full report
 """
+import shutil
+import tempfile
+from datetime import datetime
+
 import optuna
 import yaml
-from datetime import datetime
 from sklearn.model_selection import StratifiedKFold
 
 from src.data import load_data
@@ -63,11 +65,15 @@ def main():
     selection_metric = cv_config["selection_metric"]
     scorers = build_scorers(metrics)
     n_jobs = cv_config.get("n_jobs", 1)
+    selection_config = config.get("feature_selection") or {}
+    selection_enabled = selection_config.get("enabled", False)
     print(f"Model: {model_type}   |   selection metric: {selection_metric}   |   "
-          f"{cv_config['n_splits']}-fold CV")
+          f"{cv_config['n_splits']}-fold CV   |   feature selection: "
+          f"{'min_votes ' + str(selection_config.get('min_votes', 2)) if selection_enabled else 'off'}")
     print(f"Data:  {len(X_dev)} development rows   |   {len(X_test)} test rows locked away (not used)")
 
-    pipeline = build_pipeline(config["preprocessing"], config["model"])
+    cache_dir = tempfile.mkdtemp(prefix="pipeline_cache_")       # deleted at the end of the run
+    pipeline = build_pipeline(config["preprocessing"], config["model"], selection_config, memory=cache_dir)
     floor_pipeline = build_pipeline(config["preprocessing"], {"type": "dummy"})
     floor_scores, _ = cross_validate_pipeline(floor_pipeline, X_dev, y_dev, cv,
                                               {selection_metric: scorers[selection_metric]}, selection_metric, n_jobs)
@@ -92,6 +98,8 @@ def main():
             raise ValueError(f"tuning is enabled but config.yaml has no tuning.search_spaces for "
                              f"'{model_type}'. Add one, or set tuning.enabled: False.")                                  # a clear message instead of a KeyError
         search_space = search_spaces[model_type]
+        if selection_enabled:
+            search_space.update(selection_config.get("search_space") or {})
         n_trials = tuning_config["n_trials"]
         tuning_seed = tuning_config["random_state"]
         optuna.logging.set_verbosity(optuna.logging.WARNING)
@@ -125,11 +133,16 @@ def main():
 
     pipeline.fit(X_dev, y_dev)
     refit = f"Final model: {config['model']['type']} refit on all {len(X_dev)} development rows."
+    if selection_enabled:
+        all_features = pipeline.named_steps["prep"].get_feature_names_out()
+        kept = pipeline.named_steps["select"].get_feature_names_out(all_features)
+        refit += f"\nFeatures kept: {len(kept)} of {len(all_features)}: {', '.join(kept)}"
     print(refit)
     report += "\n" + refit + "\n"
 
     row = {"run": run, "data": config["data"]["path"], "model": model_type, "tuned": tuning_enabled,
            "encoder": config["preprocessing"]["encoder"], "scaler": config["preprocessing"]["scaler"],
+           "feature_selection": (f"min_votes {pipeline.named_steps['select'].min_votes}" if selection_enabled else "off"),
            "params": str(config["model"].get("params")), "tuned_params": str(study.best_params) if tuning_enabled else "",
            "metric": selection_metric, "mean": final_scores["validation"].mean(),
            "std": final_scores["validation"].std(ddof=1), "untuned": untuned, "floor": floor,
@@ -143,6 +156,7 @@ def main():
     print(f"\nScoreboard (runs on the same data and metric; best first)\n{board}")
     report += f"\nScoreboard:\n{board}\n"
 
+    shutil.rmtree(cache_dir, ignore_errors=True)
     path = save_run(config.get("output", {}).get("results_dir", "results"), run, config, report)
     print(f"\n{refit}\nFull report (per-fold tables, tuning, confusion matrix, fairness): {path}")
 

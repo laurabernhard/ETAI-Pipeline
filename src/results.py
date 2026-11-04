@@ -7,7 +7,6 @@ so you can open it again later, or compare two runs side by side after changing 
 """
 import os
 import pandas as pd
-from datetime import datetime
 
 
 def save_scores(path: str, row: dict) -> pd.DataFrame:
@@ -31,6 +30,9 @@ def save_run(results_dir: str, run: str, config: dict, report_text: str) -> str:
     tuning = config.get("tuning", {})
     tuning_line = (f"Optuna, {tuning['n_trials']} trials x {tuning['n_splits']} folds, nested CV  "
                    f"random_state={tuning['random_state']}" if tuning.get("enabled") else "off")
+    selection = config.get("feature_selection") or {}
+    selection_line = (f"VoteSelector, min_votes={selection.get('min_votes', 2)} (before tuning)"
+                      if selection.get("enabled") else "off")
     header = (
         f"Run: {run}\n"
         f"Model: {config['model']['type']}  params={config['model'].get('params')}\n"
@@ -39,6 +41,7 @@ def save_run(results_dir: str, run: str, config: dict, report_text: str) -> str:
         f"CV: {cv['n_splits']} stratified folds  shuffle={cv.get('shuffle', True)}  "
         f"random_state={cv.get('random_state')}\n"
         f"Metrics: {cv['metrics']}  selection metric: {cv['selection_metric']}\n"
+        f"Feature selection: {selection_line}\n"
         f"Tuning: {tuning_line}\n"
         f"Locked test set: size={config['test_set']['size']}  "
         f"random_state={config['test_set']['random_state']}  (not evaluated)\n"
