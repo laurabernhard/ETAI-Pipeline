@@ -4,7 +4,6 @@
 
 data:
   path: "data/adult_train.csv"
-  predictions_path: 
   target: "income_over_50k"
   sensitive_attr: ["race", "sex"]
   drop_columns: ["id", "fnlwgt"]

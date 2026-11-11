@@ -156,9 +156,10 @@ Target question: Is a person's income above 50,000 USD?
 
 ### How to run the pipeline
 ```bash
-python main.py config_adult.yalm        # for Adult income data
+python main.py config_adult.yaml        # for Adult income data
 python main.py                          # for COMPAS, exactly as before (config.yaml)
 ```
+The final model's predictions for `data/adult_new.csv` are save in `predictions/adult_new_predictions.csv` (`id`, `probability`, `predicition`).
 
 ### What broke, why, and how to fix it
 | | What broke | Why | Fix |
@@ -176,8 +177,7 @@ All scores are nested cross-validation estimates on the development set (5 strat
 |---|---|---|---|---|
 | No model (always "≤ 50K") | 0.500 | 0.761 | 0.000 | 0/3 |
 | Default decision tree | 0.724 ± 0.017 | 0.800 ± 0.011 | 0.580 ± 0.026 | 0/3 |
-|---|---|---|---|---|
-| Gradient boosting (tuned) | 0.909 ± 0.016 ✓ | 0.858 ± 0.011 ✓ | 0.669 ± 0.031 ✓ | 3/3 |
+| **Gradient boosting (tuned)** | **0.909 ± 0.016 ✓** | **0.858 ± 0.011 ✓** | **0.669 ± 0.031 ✓** | **3/3** |
 | AdaBoost (tuned) | 0.905 ± 0.017 ✓ | 0.856 ± 0.010 ✓ | 0.667 ± 0.034 ✓ | 3/3 |
 | XGBoost (tuned) | 0.906 ± 0.015 ✓ | 0.855 ± 0.011 ✓ (on the line) | 0.669 ± 0.033 ✓ | 3/3 |
 | Oblique random forest (tuned) | 0.900 ± 0.013 ✓ | 0.857 ± 0.011 ✓ | 0.659 ± 0.030 | 2/3 |
@@ -189,16 +189,16 @@ All scores are nested cross-validation estimates on the development set (5 strat
 
 **Features kept** (feature selection, the same 8 of 36 in every run): `age`, `education_num`, `capital_gain`, `capital_loss`, `hours_per_week`, `marital_status`, `occupation`, `relationship`. None of the 25 anonymous `v01`–`v25` columns was kept, and neither was `workclass_was_missing`.
 
-<!-- ### Analysis
-**Which model.** Gradient boosting, AdaBoost and XGBoost reach all three targets in the same run. I present gradient boosting as the final model because it clears all three with the most margin (ROC-AUC +0.009, accuracy +0.003, F1 +0.009), while XGBoost's accuracy is exactly on the line. This is a choice among equals: by the corrected paired t-test on F1, the model with the highest mean (hist gradient boosting, 0.686) is not significantly better than any of the next five models (p between 0.08 and 0.43). It is only clearly ahead of the oblique random forest, the decision tree and Naive Bayes.
+### Analysis
+**Best model:** Gradient boosting, AdaBoost and XGBoost reach all three targets in the same run. I chose gradient boosting as the final model because it reaches all three targets with the most margin (ROC-AUC +0.009, accuracy +0.003, F1 +0.009). This choice is not a statistically strong one: the corrected paired t-test finds no significant gap between the best F1 score (Hist gradient boosting, 0.686) and the five models just below it (p from 0.08 to 0.43). It is only clearly ahead of the oblique random forest, the decision tree and naive bayes.
 
-**Accuracy and F1 pull in different directions.** The models that use `class_weight: balanced` (hist gradient boosting, random forest, logistic regression, decision tree) reach a recall of 0.80–0.84 and the best F1 scores, but their accuracy stays at 0.77–0.82, below the 0.855 target. The unweighted boosters have a recall of only about 0.60, but accuracy of 0.855–0.858. Hist gradient boosting has the best F1 (0.686) and yet fails the accuracy target, which is why the three targets must be read together.
+**Accuracy vs F1:** The models that use `class_weight: balanced` (hist gradient boosting, random forest, logistic regression, decision tree) reach F1 scores of 0.62–0.69 (the two best F1 scores included), but their accuracy stays at 0.77–0.82, below the 0.855 target. The unweighted boosters reach the accuracy target (0.855–0.858) with an F1 of about 0.67. This is not a difference in how well the models rank people: ROC-AUC, which does not depend on the threshold, is about the same for the two weighted ensembles (0.903–0.908) and the unweighted boosters (0.905–0.909). Class weighting works much like lowering the decision threshold, so more people are predicted as earning over 50K, which raises F1 and lowers accuracy. Hist gradient boosting has the best F1 (0.686) and yet fails the accuracy target, which is why the three targets must be read together.
 
-**Tuning.** It helped the models that were weak or overfitted with default settings: Naive Bayes (F1 0.433 → 0.506), the decision tree (0.580 → 0.620) and AdaBoost (0.649 → 0.667). For gradient boosting (0.678 → 0.669) and XGBoost (0.685 → 0.669) the honest nested estimate is slightly lower than the default's score, so with 10 trials the default hyperparameters were already as good.
+**Tuning:** It helped the models that were weak or overfitted with default settings: Naive Bayes (F1 0.433 → 0.506), the decision tree (0.580 → 0.620) and AdaBoost (0.649 → 0.667). For gradient boosting (0.678 → 0.669) and XGBoost (0.685 → 0.669) the honest nested estimate is slightly lower than the default's score, so with 10 trials the default hyperparameters were already as good.
 
-**Features and fairness.** Selection kept 8 of 36 inputs and no `v` column, so the anonymous columns added nothing the three voting models could use. Both sensitive attributes were excluded from the features and audited. The false positive rate (people earning ≤ 50K predicted to earn more) of the final model is 0.09 for men and 0.02 for women; the class-weighted models show larger values (for example 0.27 vs 0.06 for hist gradient boosting). By race it ranges from 0.03 to 0.10, but the smallest groups have fewer than 110 people, so those rates are noisy. Excluding `race` and `sex` does not remove proxies such as `relationship` or `marital_status`.
+**Features and fairness:** Selection kept 8 of 36 inputs and no `v` column, so the anonymous columns added nothing that the three voting models could use. Both sensitive attributes were excluded from the features and audited. The false positive rate (people earning ≤ 50K predicted to earn more) of the final model is 0.09 for men and 0.02 for women; the class-weighted models show larger values (for example 0.27 vs 0.06 for hist gradient boosting). By race it ranges from 0.03 to 0.10, but the smallest groups have fewer than 110 people, so those rates are noisy. Excluding `race` and `sex` does not remove proxies such as `relationship` or `marital_status`.
 
-**Reflection.** The hardest assumptions to find were the ones that do not crash. The `KeyError`s pointed straight to the line that assumed COMPAS, but a `?` stays as a category unless its column is listed in `canonical_categories`, and a column missing from the feature lists is silently left out of the model, so I had to check the missing counts (379, 381 and 86) and the "features kept" line. Going from a single decision tree (ROC-AUC 0.72, accuracy 0.80, F1 0.58) to boosted ensembles of shallow trees is what reached the targets. The class-weighting trade-off explains why the unweighted boosters met all three and the weighted models did not. -->
+**Reflection:** The hardest assumptions to find were the ones that do not crash. The `KeyError`s pointed straight to the line that assumed COMPAS, but a `?` stays as a category unless its column is listed in `canonical_categories`, and a column missing from the feature lists is silently left out of the model, so I had to check the missing counts (379, 381 and 86) and the "features kept" line. Going from a single decision tree (ROC-AUC 0.72, accuracy 0.80, F1 0.58) to boosted ensembles of shallow trees is what reached the targets. The class-weighting trade-off explains why the unweighted boosters met all three and the weighted models did not.
 
 
 ## Environment setup
