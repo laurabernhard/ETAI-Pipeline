@@ -12,6 +12,7 @@ This orchestrates the full pipeline:
     -> out-of-fold reports -> refit on all development rows -> scoreboard + full report
 """
 import shutil
+import sys
 import tempfile
 from datetime import datetime
 
@@ -28,6 +29,9 @@ from src.results import save_run, save_scores
 
 import warnings
 warnings.simplefilter("ignore", FutureWarning)
+
+from sklearn.exceptions import DataDimensionalityWarning
+warnings.simplefilter("ignore", DataDimensionalityWarning)
 
 
 def load_config(path: str = "config.yaml") -> dict:
@@ -46,10 +50,11 @@ def main(config_path: str = "config.yaml"):
     df_clean = clean_dataset(df_raw, config["diagnostics"])          # row-preserving: also safe for new data
     df_clean = drop_duplicate_rows(df_clean, config["diagnostics"].get("id_column"))    # training data only
 
-    df_preproc = add_engineered_features(df_clean)
+    if config.get("feature_engineering", {}).get("enabled", False):
+        df_clean = add_engineered_features(df_clean, config)
 
     mnar_sources = config["preprocessing"].get("mnar_indicator_sources", [])
-    X, y, extras = split_features_target(df_preproc, config["data"], mnar_sources)
+    X, y, extras = split_features_target(df_clean, config["data"], mnar_sources)
 
     X_dev, X_test, y_dev, y_test, extras_dev, extras_test = split_dev_test(
         X, y, extras,
@@ -92,7 +97,7 @@ def main(config_path: str = "config.yaml"):
 
     tuning_config = config.get("tuning", {})
     tuning_enabled = tuning_config.get("enabled", False)
-    if tuning_config:
+    if tuning_enabled:
         search_spaces = tuning_config.get("search_spaces") or {}
         if model_type not in search_spaces:
             raise ValueError(f"tuning is enabled but config.yaml has no tuning.search_spaces for "
@@ -129,7 +134,11 @@ def main(config_path: str = "config.yaml"):
     for name in metrics:
         print(f"  {name:<18s} {final_scores[name].mean():.3f} ± {final_scores[name].std(ddof=1):.3f}")
     report += "\n\n" + oof_classification_report(y_dev, oof_proba)
-    report += "\n" + fairness_report(y_dev, oof_proba, extras_dev, sensitive_attr=config["data"]["sensitive_attr"])
+
+    sensitive = config["data"]["sensitive_attr"]
+    sensitive = [sensitive] if isinstance(sensitive, str) else sensitive
+    for attr in sensitive:
+        report += "\n" + fairness_report(y_dev, oof_proba, extras_dev, sensitive_attr=attr)
 
     pipeline.fit(X_dev, y_dev)
     refit = f"Final model: {config['model']['type']} refit on all {len(X_dev)} development rows."
@@ -162,4 +171,4 @@ def main(config_path: str = "config.yaml"):
 
 
 if __name__ == "__main__":
-    main()
+    main(sys.argv[1] if len(sys.argv) > 1 else "config.yaml")

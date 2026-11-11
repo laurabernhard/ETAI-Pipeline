@@ -62,6 +62,11 @@ preprocessing:
     numeric_strategy: "median"        # applies to age, juv_fel_count, juv_misd_count, juv_other_count, priors_count
     categorical_strategy: "most_frequent"   # applies to sex, age_cat, c_charge_degree
 
+feature_engineering:
+  enabled: true
+  features: ["priors_per_adult_year", "priors_log", "juvenile_total", "total_history_per_year",
+             "young_flag", "young_x_priors", "early_onset"]
+
 model:
   type: "xgboost"     # dummy | logistic_regression | naive_bayes | decision_tree | random_forest | oblique_random_forest | adaboost | gradient_boosting | hist_gradient_boosting | xgboost
   params:
@@ -144,5 +149,5 @@ tuning:
 
 output:
   results_dir: "results"   # each run's full report is saved here as a timestamped .txt file
-  score_board: "results/runs.csv"
+  scoreboard: "results/runs.csv"
 

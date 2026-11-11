@@ -113,16 +113,17 @@ def split_features_target(df: pd.DataFrame, data_config: dict, mnar_indicator_so
     on label-free inference data -- nothing downstream requires the target to be present.
     """
     target = data_config["target"]
-    sensitive_attr = data_config["sensitive_attr"]
+    sensitive = data_config["sensitive_attr"]
+    sensitive_attrs = [sensitive] if isinstance(sensitive, str) else sensitive
     drop_columns = data_config.get("drop_columns", [])
 
     df = add_missingness_indicators(df, mnar_indicator_sources)
     y = df[target] if target in df.columns else None
 
-    extras_cols = [c for c in [sensitive_attr, "score_text"] if c in df.columns]
+    extras_cols = [c for c in sensitive_attrs + ["score_text"] if c in df.columns]
     extras = df[extras_cols].copy() if extras_cols else None
 
-    always_drop = set(drop_columns) | {target, sensitive_attr}
+    always_drop = set(drop_columns) | {target} | set(sensitive_attrs)
     feature_cols = [c for c in df.columns if c not in always_drop]
     X = df[feature_cols]
     return X, y, extras
@@ -196,13 +197,22 @@ def build_preprocessor(preprocessing_config: dict) -> ColumnTransformer:
     ])
 
 
-def add_engineered_features(df: pd.DataFrame) -> pd.DataFrame:
+def add_engineered_features(df: pd.DataFrame, config: dict) -> pd.DataFrame:
     out = df.copy()
-    out["priors_per_adult_year"] = out["priors_count"] / (out["age"] - 17).clip(lower=1)   # NaN stays NaN -> imputed later
-    out["priors_log"] = np.log1p(out["priors_count"])
-    out["juvenile_total"] = out["juv_fel_count"] + out["juv_misd_count"] + out["juv_other_count"]
-    out["total_history_per_year"] = (out["priors_count"] + out["juvenile_total"]) / (out["age"] - 17).clip(lower=1)
-    out["young_flag"] = (out["age"] < 25).astype(int)
-    out["young_x_priors"] = out["young_flag"] * out["priors_log"]
-    out["early_onset"] = ((out["juvenile_total"] > 0) & (out["priors_count"] > 0)).astype(int)
+    features = config.get("feature_engineering", {}).get("features", [])
+
+    if "priors_per_adult_year" in features:
+        out["priors_per_adult_year"] = out["priors_count"] / (out["age"] - 17).clip(lower=1)   # NaN stays NaN -> imputed later
+    if "priors_log" in features:
+        out["priors_log"] = np.log1p(out["priors_count"])
+    if "juvenile_total" in features:
+        out["juvenile_total"] = out["juv_fel_count"] + out["juv_misd_count"] + out["juv_other_count"]
+    if "total_history_per_year" in features:
+        out["total_history_per_year"] = (out["priors_count"] + out["juvenile_total"]) / (out["age"] - 17).clip(lower=1)
+    if "young_flag" in features:
+        out["young_flag"] = (out["age"] < 25).astype(int)
+    if "young_x_priors" in features:
+        out["young_x_priors"] = out["young_flag"] * out["priors_log"]
+    if "early_onset" in features:
+        out["early_onset"] = ((out["juvenile_total"] > 0) & (out["priors_count"] > 0)).astype(int)
     return out
