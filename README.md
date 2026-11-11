@@ -151,13 +151,13 @@ Feature selection proved extremely aggressive: only `age` and `priors_count` rec
 I would keep selection on, since a 2-feature model is far easier to explain and deploy, and no loss in performance could be detected. If maximizing F1 was the only goal, I would turn it off, since 5 folds are too few to rule out a small drop.
 
 ## Beyond COMPAS
-I chose **option A**: adapt the pipeline for new data (Adult income)
+I chose **option A**: adapt the pipeline for new data (Adult income)  
 Target question: Is a person's income above 50,000 USD?
 
-**How to run it**
+### How to run the pipeline
 ```bash
-python main.py config_adult.yalm        # Adult income
-python main.py                          # COMPAS, exactly as before (config.yaml)
+python main.py config_adult.yalm        # for Adult income data
+python main.py                          # for COMPAS, exactly as before (config.yaml)
 ```
 
 ### What broke, why, and how to fix it
@@ -169,18 +169,27 @@ python main.py                          # COMPAS, exactly as before (config.yaml
 | 4 | `KeyError: 'score_text'` in `fairness_report()` | it compared the model with COMPAS's own score | the comparison only runs when `score_text` exists |
 
 ### Results
-| Model | ROC-AUC | Accuracy | F1 (class 1, threshold 0.5) |
-|---|---|---|---|
-| **Target** | **≥ 0.90** | **≥ 0.855** | **≥ 0.66** |
-| No model (always "≤ 50K") | 0.500 | [ ] | 0.000 |
-| Default decision tree | 0.724 ± 0.017 | 0.800 ± 0.011 | 0.580 ± 0.026 |
-| Hist gradient boosting (tuned) | [ ] | [ ] | 0.686 ± 0.030 |
-| Random forest (tuned) | [ ] | [ ] | 0.674 ± 0.026 |
-| Gradient boosting (tuned) | [ ] | [ ] | 0.669 ± 0.031 |
-| XGBoost (tuned) | [ ] | [ ] | 0.669 ± 0.033 |
-| AdaBoost (tuned) | [ ] | [ ] | 0.667 ± 0.034 |
-| Logistic regression (tuned) | [ ] | [ ] | 0.666 ± 0.026 |
-| Oblique random forest (tuned) | [ ] | [ ] | 0.659 ± 0.030 |
+All scores are nested cross-validation estimates on the development set (5 stratified folds, mean ± std, same folds for every model); the locked test set was not used.  
+✓ = target reached.
+
+| Model | ROC-AUC (≥ 0.90) | Accuracy (≥ 0.855) | F1, class 1 (≥ 0.66) | Targets met |
+|---|---|---|---|---|
+| No model (always "≤ 50K") | 0.500 | 0.761 | 0.000 | 0/3 |
+| Default decision tree | 0.724 ± 0.017 | 0.800 ± 0.011 | 0.580 ± 0.026 | 0/3 |
+|
+| Gradient boosting (tuned) | 0.909 ± 0.016 ✓ | 0.858 ± 0.011 ✓ | 0.669 ± 0.031 ✓ | 3/3 |
+| AdaBoost (tuned) | 0.905 ± 0.017 ✓ | 0.856 ± 0.010 ✓ | 0.667 ± 0.034 ✓ | 3/3 |
+| XGBoost (tuned) | 0.906 ± 0.015 ✓ | 0.855 ± 0.011 ✓ (on the line) | 0.669 ± 0.033 ✓ | 3/3 |
+| Oblique random forest (tuned) | 0.900 ± 0.013 ✓ | 0.857 ± 0.011 ✓ | 0.659 ± 0.030 | 2/3 |
+| Hist gradient boosting (tuned) | 0.908 ± 0.016 ✓ | 0.816 ± 0.018 | 0.686 ± 0.030 ✓ | 2/3 |
+| Random forest (tuned) | 0.903 ± 0.015 ✓ | 0.811 ± 0.017 | 0.674 ± 0.026 ✓ | 2/3 |
+| Logistic regression (tuned) | 0.895 ± 0.014 | 0.801 ± 0.017 | 0.666 ± 0.026 ✓ | 1/3 |
+| Decision tree (tuned) | 0.832 ± 0.037 | 0.772 ± 0.014 | 0.620 ± 0.023 | 0/3 |
+| Naive Bayes (tuned) | 0.884 ± 0.014 | 0.819 ± 0.008 | 0.506 ± 0.026 | 0/3 |
+
+**Features kept** (feature selection, the same 8 of 36 in every run): `age`, `education_num`, `capital_gain`, `capital_loss`, `hours_per_week`, `marital_status`, `occupation`, `relationship`. None of the 25 anonymous `v01`–`v25` columns was kept, and neither was `workclass_was_missing`.
+
+
 
 
 ## Environment setup
