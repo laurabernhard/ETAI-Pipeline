@@ -4,7 +4,7 @@
 
 data:
   path: "data/adult_train.csv"
-  path_new: "data/adult_new.csv"
+  predictions_path: 
   target: "income_over_50k"
   sensitive_attr: ["race", "sex"]
   drop_columns: ["id", "fnlwgt"]
@@ -12,6 +12,11 @@ data:
 test_set:
   size: 0.2
   random_state: 42
+
+predict:
+  data_path: "data/adult_new.csv"
+  output_path: "predictions/adult_new_predictions.csv"
+  threshold: 0.5
 
 cv:
   n_splits: 5
@@ -56,12 +61,12 @@ feature_engineering:
   features: []
 
 model:
-  type: "xgboost"     # dummy | logistic_regression | naive_bayes | decision_tree | random_forest | oblique_random_forest | adaboost | gradient_boosting | hist_gradient_boosting | xgboost
+  type: "gradient_boosting"     # dummy | logistic_regression | naive_bayes | decision_tree | random_forest | oblique_random_forest | adaboost | gradient_boosting | hist_gradient_boosting | xgboost
   params:
   # logistic_regression:
     # {max_iter: 2000, class_weight: balanced}
   # naive_bayes / gradient_boosting:
-    # {}
+    {}
   # decision_tree:
     # {random_state: 42, class_weight: balanced}
   # random_forest:
@@ -73,7 +78,7 @@ model:
   # hist_gradient_boosting:
     # {random_state: 42, class_weight: balanced}
   # xgboost:
-    {n_estimators: 300, learning_rate: 0.05, max_depth: 4, random_state: 42, n_jobs: -1}
+    # {n_estimators: 300, learning_rate: 0.05, max_depth: 4, random_state: 42, n_jobs: -1}
 
 feature_selection:
   enabled: true

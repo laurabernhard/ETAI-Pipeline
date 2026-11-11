@@ -26,6 +26,7 @@ from src.model import build_pipeline
 from src.tuning import tune_pipeline, nested_cross_validate, tuning_report
 from src.evaluate import cross_validate_pipeline, cv_report, oof_classification_report, fairness_report, build_scorers
 from src.results import save_run, save_scores
+from src.predictions import predict_new_data
 
 import warnings
 warnings.simplefilter("ignore", FutureWarning)
@@ -141,6 +142,9 @@ def main(config_path: str = "config.yaml"):
         report += "\n" + fairness_report(y_dev, oof_proba, extras_dev, sensitive_attr=attr)
 
     pipeline.fit(X_dev, y_dev)
+    if config.get("predict"):
+        predict_new_data(pipeline, config)
+
     refit = f"Final model: {config['model']['type']} refit on all {len(X_dev)} development rows."
     if selection_enabled:
         all_features = pipeline.named_steps["prep"].get_feature_names_out()
