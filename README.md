@@ -37,6 +37,7 @@ It has some **deliberately weak spots**. Part of your work this semester is find
 | 6 | Ensembles in depth: random forest, oblique random forest, AdaBoost | Two new model types in `src/model.py`: `oblique_random_forest` (a forest of oblique trees built from scikit-learn parts -- every tree splits on its own random sparse linear combinations of the features, via `SparseRandomProjection` inside `BaggingClassifier`) and `adaboost` (AdaBoost over decision trees of a chosen depth; stumps by default), both registered in `_MODELS`; the random forest is now the model `main.py` runs (200 trees, all CPU cores); `config.yaml` gains search spaces for the three ensembles -- the forests tune tree size (`max_depth`, `min_samples_leaf`) and decorrelation (`max_features` / number of combinations) but not the number of trees, AdaBoost tunes its base trees' depth, its number of rounds and its learning rate; `corrected_paired_test()` in `src/evaluate.py` compares two models scored on the same folds (Nadeau & Bengio's corrected paired t-test), so a "winner" is only called when the difference is bigger than fold-to-fold noise; `scipy` listed in `requirements.txt` (it already came with scikit-learn, so nothing new to install) -- see "Ensembles" below |
 | 7 |	Gradient boosting + evaluating with probabilities	| Three new model types in `src/model.py`: `gradient_boosting` (scikit-learn's `GradientBoostingClassifier`: each shallow tree fits the gradient of the log-loss left by the trees before it), `hist_gradient_boosting` (the same idea on binned features: much faster on large data, and it handles missing values itself) and `naive_bayes` (`GaussianNB`, a fast probabilistic baseline); gradient boosting is now the model main.py runs, each with its search space in `config.yaml`; evaluation now reports **several metrics** (accuracy, balanced accuracy, precision, recall, F1, F-beta, ROC-AUC, PR-AUC) and one **selection metric** (`cv.selection_metric`, F1) that tuning maximises and runs are ranked by; out-of-fold **probabilities** (not just labels) feed the reports, with a confusion matrix; class_weight: balanced in the commented examples of the models that support it; new `save_scores()` in `src/results.py`: every run adds a row to `results/runs.csv` (the model and its settings, the score on each fold, the no-model floor and the untuned score on the same folds), so any two runs on the same data and folds can be compared with `corrected_paired_test()`; the printed output was reorganised to be easier to read, with the full tables in the results file -- see "Model evaluation" below |
 | 8 | XGBoost + feature selection | New model type `xgboost` (`XGBClassifier`, from the `xgboost` package: gradient boosting with extra regularisation, multi-threaded, handles missing values itself), now the model `main.py` runs, with its search space in `config.yaml`; **feature selection** as a learned step of the Pipeline: new `VoteSelector` class in `src/model.py` (a random forest, gradient boosting and an L1 logistic regression vote; features with at least `min_votes` votes are kept), placed between `"prep"` and `"model"` by `build_pipeline()` when the new `feature_selection` section of `config.yaml` switches it on, so it is re-fitted on the training rows of every fold (never on the rows it is scored on); with tuning on, `select__min_votes` is tuned with the model and assessed by nested CV; the pipeline caches fitted preprocessing and selection steps during a run (`Pipeline(memory=...)`, a temporary folder deleted at the end), so tuning doesn't refit them in every trial; the final model's kept features are printed, and the scoreboard records the selection setting -- see "Feature selection" below |
+| 9 | Beyond COMPAS (option A: Adult income) | Second config `config_adult.yaml` and `main.py` takes the config path as an argument (`python main.py config_adult.yaml`, default `config.yaml`); feature engineering is now config-driven (`feature_engineering` section); `sensitive_attr` accepts one or several columns and the fairness report runs once per attribute; the comparison with COMPAS's own score only runs when `score_text` exists; separate output folder `results_adult/` -- see "Beyond COMPAS" below |
 
 ## Preprocessing decisions
 | Column(s) | Issue found | Mechanism | What was done |
@@ -149,7 +150,8 @@ Tuned XGBoost achieved an F1 score of 0.623 without feature selection and 0.615 
 Feature selection proved extremely aggressive: only `age` and `priors_count` received any vote from the three models, so the final model uses just 2 of the 10 inputs, even with `min_votes` = 1. This much smaller model performs within noise of the full one, though it scored lower in 4 of the 5 folds.
 I would keep selection on, since a 2-feature model is far easier to explain and deploy, and no loss in performance could be detected. If maximizing F1 was the only goal, I would turn it off, since 5 folds are too few to rule out a small drop.
 
-## Beyond COMPAS (New data: Adult income)
+## Beyond COMPAS
+I chose **option A**: adapt the pipeline for new data (Adult income)
 Target question: Is a person's income above 50,000 USD?
 
 **How to run it**
@@ -163,11 +165,22 @@ python main.py                          # COMPAS, exactly as before (config.yaml
 |---|---|---|---|
 | 1 | `main.py config_adult.yaml` ran with `config.yaml` | the `__main__` block called `main()` without reading the command line | read the path from `sys.argv[1]`, falling back to `config.yaml` |
 | 2 | `KeyError: 'priors_count'` in `add_engineered_features()` | it assumed COMPAS columns (`priors_count`, `juv_*_count`) | config-driven `feature_engineering` section (`enabled` + `features` list); COMPAS lists all seven, so its results are unchanged |
-| 3 | `TypeError: unhashable type: 'list'` in `split_features_target()` | it assumed one sensitive attribute, Adult has two (`race`, `sex`) | `sensitive_attr` is a string or a list; the fairness report runs once per attribute |
+| 3 | `TypeError: unhashable type: 'list'` in `split_features_target()` | it assumed one sensitive attribute, Adult data has two (`race`, `sex`) | `sensitive_attr` is a string or a list; the fairness report runs once per attribute |
 | 4 | `KeyError: 'score_text'` in `fairness_report()` | it compared the model with COMPAS's own score | the comparison only runs when `score_text` exists |
 
 ### Results
-
+| Model | ROC-AUC | Accuracy | F1 (class 1, threshold 0.5) |
+|---|---|---|---|
+| **Target** | **≥ 0.90** | **≥ 0.855** | **≥ 0.66** |
+| No model (always "≤ 50K") | 0.500 | [ ] | 0.000 |
+| Default decision tree | 0.724 ± 0.017 | 0.800 ± 0.011 | 0.580 ± 0.026 |
+| Hist gradient boosting (tuned) | [ ] | [ ] | 0.686 ± 0.030 |
+| Random forest (tuned) | [ ] | [ ] | 0.674 ± 0.026 |
+| Gradient boosting (tuned) | [ ] | [ ] | 0.669 ± 0.031 |
+| XGBoost (tuned) | [ ] | [ ] | 0.669 ± 0.033 |
+| AdaBoost (tuned) | [ ] | [ ] | 0.667 ± 0.034 |
+| Logistic regression (tuned) | [ ] | [ ] | 0.666 ± 0.026 |
+| Oblique random forest (tuned) | [ ] | [ ] | 0.659 ± 0.030 |
 
 
 ## Environment setup
