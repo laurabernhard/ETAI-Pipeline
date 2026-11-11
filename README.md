@@ -149,6 +149,26 @@ Tuned XGBoost achieved an F1 score of 0.623 without feature selection and 0.615 
 Feature selection proved extremely aggressive: only `age` and `priors_count` received any vote from the three models, so the final model uses just 2 of the 10 inputs, even with `min_votes` = 1. This much smaller model performs within noise of the full one, though it scored lower in 4 of the 5 folds.
 I would keep selection on, since a 2-feature model is far easier to explain and deploy, and no loss in performance could be detected. If maximizing F1 was the only goal, I would turn it off, since 5 folds are too few to rule out a small drop.
 
+## Beyond COMPAS (New data: Adult income)
+Target question: Is a person's income above 50,000 USD?
+
+**How to run it**
+```bash
+python main.py config_adult.yalm        # Adult income
+python main.py                          # COMPAS, exactly as before (config.yaml)
+```
+
+### What broke, why, and how to fix it
+| | What broke | Why | Fix |
+|---|---|---|---|
+| 1 | `main.py config_adult.yaml` ran with `config.yaml` | the `__main__` block called `main()` without reading the command line | read the path from `sys.argv[1]`, falling back to `config.yaml` |
+| 2 | `KeyError: 'priors_count'` in `add_engineered_features()` | it assumed COMPAS columns (`priors_count`, `juv_*_count`) | config-driven `feature_engineering` section (`enabled` + `features` list); COMPAS lists all seven, so its results are unchanged |
+| 3 | `TypeError: unhashable type: 'list'` in `split_features_target()` | it assumed one sensitive attribute, Adult has two (`race`, `sex`) | `sensitive_attr` is a string or a list; the fairness report runs once per attribute |
+| 4 | `KeyError: 'score_text'` in `fairness_report()` | it compared the model with COMPAS's own score | the comparison only runs when `score_text` exists |
+
+### Results
+
+
 
 ## Environment setup
 You only need to do this once per machine.
