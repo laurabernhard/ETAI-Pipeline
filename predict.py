@@ -31,7 +31,7 @@ def predict(df: pd.DataFrame, pipeline, config: dict) -> pd.DataFrame:
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Predict a CSV with the model saved by main.py.")
     parser.add_argument("input", help="CSV with the same columns as the training data (no target needed)")
-    parser.add_argument("output", nargs="?", default="predictions.csv", help="where to write the predictions")
+    parser.add_argument("output", nargs="?", default="predictions/predictions.csv", help="where to write the predictions")
     parser.add_argument("--config", default="config.yaml", help="path to the config file (default: config.yaml)")
     args = parser.parse_args()
 

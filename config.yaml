@@ -59,14 +59,14 @@ preprocessing:
   mnar_indicator_sources: ["priors_count", "c_charge_degree"]
   random_state: 42
   imputation:
-    numeric_strategy: "median"                      # median | mean | knn | iterative | random_forest
+    numeric_strategy: "iterative"                      # median | mean | knn | iterative | random_forest
     categorical_strategy: "most_frequent"
     n_neighbors: 5                                  # knn
     max_iter: 10                                    # iterative, random_forest
     n_estimators: 50                                # random_forest (trees per column)
 
 feature_engineering:
-  enabled: true
+  enabled: false
   features: ["priors_per_adult_year", "priors_log", "juvenile_total", "total_history_per_year",
              "young_flag", "young_x_priors", "early_onset"]
 
@@ -93,14 +93,14 @@ model:
     # {n_estimators: 300, learning_rate: 0.05, max_depth: 4, random_state: 42, n_jobs: -1}
 
 feature_selection:
-  enabled: true
+  enabled: false
   min_votes: 2                                        # 1 (keep almost all) .. 3 (keep only unanimous)
   random_state: 42
   search_space:                                       # tuned together with the model when tuning is on
     select__min_votes: {type: int, low: 1, high: 3}
 
 tuning:
-  enabled: true
+  enabled: false
   n_trials: 10
   n_splits: 5                                       # folds that score each candidate
   random_state: 42                                  # seeds the sampler and those folds
