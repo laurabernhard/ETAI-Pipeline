@@ -52,8 +52,11 @@ preprocessing:
   mnar_indicator_sources: ["workclass"]
   random_state: 42
   imputation:
-    numeric_strategy: "median"
+    numeric_strategy: "median"                      # median | mean | knn | iterative | random_forest
     categorical_strategy: "most_frequent"
+    n_neighbors: 5                                  # knn
+    max_iter: 10                                    # iterative, random_forest
+    n_estimators: 50                                # random_forest (trees per column)
 
 feature_engineering:
   enabled: false
@@ -138,5 +141,6 @@ tuning:
 
 output:
   results_dir: "results_adult"   # each run's full report is saved here as a timestamped .txt file
+  model_path: "models/model_adult.joblib"                 # the final fitted pipeline, used by predict.py (overwritten each run)
   scoreboard: "results_adult/runs.csv"
 
