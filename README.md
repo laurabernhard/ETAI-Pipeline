@@ -38,6 +38,8 @@ It has some **deliberately weak spots**. Part of your work this semester is find
 | 7 |	Gradient boosting + evaluating with probabilities	| Three new model types in `src/model.py`: `gradient_boosting` (scikit-learn's `GradientBoostingClassifier`: each shallow tree fits the gradient of the log-loss left by the trees before it), `hist_gradient_boosting` (the same idea on binned features: much faster on large data, and it handles missing values itself) and `naive_bayes` (`GaussianNB`, a fast probabilistic baseline); gradient boosting is now the model main.py runs, each with its search space in `config.yaml`; evaluation now reports **several metrics** (accuracy, balanced accuracy, precision, recall, F1, F-beta, ROC-AUC, PR-AUC) and one **selection metric** (`cv.selection_metric`, F1) that tuning maximises and runs are ranked by; out-of-fold **probabilities** (not just labels) feed the reports, with a confusion matrix; class_weight: balanced in the commented examples of the models that support it; new `save_scores()` in `src/results.py`: every run adds a row to `results/runs.csv` (the model and its settings, the score on each fold, the no-model floor and the untuned score on the same folds), so any two runs on the same data and folds can be compared with `corrected_paired_test()`; the printed output was reorganised to be easier to read, with the full tables in the results file -- see "Model evaluation" below |
 | 8 | XGBoost + feature selection | New model type `xgboost` (`XGBClassifier`, from the `xgboost` package: gradient boosting with extra regularisation, multi-threaded, handles missing values itself), now the model `main.py` runs, with its search space in `config.yaml`; **feature selection** as a learned step of the Pipeline: new `VoteSelector` class in `src/model.py` (a random forest, gradient boosting and an L1 logistic regression vote; features with at least `min_votes` votes are kept), placed between `"prep"` and `"model"` by `build_pipeline()` when the new `feature_selection` section of `config.yaml` switches it on, so it is re-fitted on the training rows of every fold (never on the rows it is scored on); with tuning on, `select__min_votes` is tuned with the model and assessed by nested CV; the pipeline caches fitted preprocessing and selection steps during a run (`Pipeline(memory=...)`, a temporary folder deleted at the end), so tuning doesn't refit them in every trial; the final model's kept features are printed, and the scoreboard records the selection setting -- see "Feature selection" below |
 | 9 | Beyond COMPAS (option A: Adult income) | Second config `config_adult.yaml` and `main.py` takes the config path as an argument (`python main.py config_adult.yaml`, default `config.yaml`); feature engineering is now config-driven (`feature_engineering` section); `sensitive_attr` accepts one or several columns and the fairness report runs once per attribute; the comparison with COMPAS's own score only runs when `score_text` exists; separate output folder `results_adult/` -- see "Beyond COMPAS" below |
+| 10 | Missing values + a deployable pipeline | The numeric imputer is a config choice (`preprocessing.imputation.numeric_strategy`): `median`, `mean`, `knn` (`KNNImputer`), `iterative` (MICE with one completed dataset, `IterativeImputer`) or `random_forest` (the missForest idea: `IterativeImputer` with a random forest per column); the numeric columns are now scaled **before** they are imputed (scalers ignore gaps when fitting, and KNN needs one scale); none of the imputers looks at the target, so they also run on new data; the runs table and report record the imputer; `main.py` **saves the final fitted pipeline** to `models/model.joblib`; new **`predict.py`**: `python predict.py new.csv predictions.csv` cleans the file with the same rules (no rows dropped) and writes one row per input row (id, probability, prediction); `data/compas_new_people.csv` to try it -- see "Missing values" and "Predicting new data" below |
+
 
 ## Preprocessing decisions
 | Column(s) | Issue found | Mechanism | What was done |
@@ -55,6 +57,7 @@ It has some **deliberately weak spots**. Part of your work this semester is find
 
 **Encoder/scaler pair:** chosen by hand in `config.yaml` -- **target encoding** (compact, informative) and **robust scaling** (median/IQR, so the few extreme counts don't set the scale). The alternatives (`onehot`/`ordinal`/`count`, `none`/`standard`/`minmax`) are one config change away.
 
+
 ## Model evaluation
 | Model | Holdout accuracy | CV accuracy (mean ± std) | CV train–val gap | Nested CV accuracy (mean ± std) | Nested CV train–val gap |
 |---|---|---|---|---|---|
@@ -63,12 +66,14 @@ It has some **deliberately weak spots**. Part of your work this semester is find
 | Decision tree | 0.659 | 0.646 ± 0.009 | +0.045 ± 0.019 | 0.672 ± 0.017 | +0.013 ± 0.023 |
 | Random forest | — | 0.676 ± 0.014 | +0.032 ± 0.018 | 0.681 ± 0.016 | +0.009 ± 0.019 |
 
+
 ## Best model
 | Week(s) | Dummy | Logistic Regression | Decision Tree | Random Forest | Comparison between models |
 |---|---|---|---|---|---|
 | 2/3 | — | Train: 0.679 <br> Test: 0.680 <br> Gap: -0.001 | Train: 0.705 <br> Test: 0.659 <br> Gap: +0.046 | — | Logistic Regression is the best model because it achieved the highest test accuracy while showing almost no train-test gap. |
 | 4 | Train: 0.549 ± 0.000 <br> Validation: 0.549 ± 0.000 <br> Gap: -0.000 ± 0.000 | Train: 0.675 ± 0.003 <br> Validation: 0.672 ± 0.013 <br> Gap: +0.003 ± 0.016 | Train: 0.691 ± 0.014 <br> Validation: 0.646 ± 0.009 <br> Gap: +0.045 ± 0.019 | Train: 0.708 ± 0.005 <br> Validation: 0.676 ± 0.014 <br> Gap: +0.032 ± 0.018 | Random Forest achieved the highest mean cross-validation, but Logistic Regression achieved very similar predictive performance with substantially less overfitting (smaller train-val gap). Therefore, Logistic Regression is considered the best model so far. |
 | 5 | — | Train: 0.676 ± 0.003 <br> Validation: 0.671 ± 0.015 <br> Gap: +0.005 ± 0.017 | Train: 0.685 ± 0.007 <br> Validation: 0.672 ± 0.017 <br> Gap: +0.013 ± 0.023 | Train: 0.691 ± 0.004 <br> Validation: 0.681 ± 0.016 <br> Gap: +0.009 ± 0.019 | After hyperparameter tuning, Random Forest achieved the highest nested cross-validation accuracy (0.681 ± 0.016) while maintaining a very small train-validation gap (+0.009). Decision Tree benefited substantially from tuning, while Logistic Regression showed almost no improvement. Therefore, the tuned Random Forest is selected as the final best model. |
+
 
 ## Hyperparameter tuning
 | Model | Default: CV mean ± std | Tuned: nested CV mean ± std | Tuning score (best trial) | Optimism | Chosen hyperparameters |
@@ -81,6 +86,7 @@ Hyperparameter tuning benefited the tree-based models the most. The decision tre
 
 Tuning changed which model was best. Before tuning, logistic regression had the highest mean CV accuracy (0.672), whereas after tuning, the random forest achieved the highest nested CV accuracy (0.681). For the final report, I would report 0.681 ± 0.016, the random forest's nested cross-validation score, because it is the honest performance estimate from nested CV and is not affected by the optimistic bias of selecting the best hyperparameters on the same data used for evaluation.
 
+
 ## Ensembles
 | Model | Default: CV mean ± std (gap) | Tuned: nested CV mean ± std (gap) | Tuning score (best trial) | Chosen hyperparameters |
 |---|---|---|---|---|
@@ -91,6 +97,7 @@ Tuning changed which model was best. Before tuning, logistic regression had the 
 | AdaBoost | 0.668 ± 0.013 (+0.003) | 0.682 ± 0.017 (+0.004) | 0.684 | estimator max_depth = 4, n_estimators = 220, learning_rate = 0.0251 |
 
 Since the differences between the tuned models (0.671 to 0.682) are smaller than the fold-to-fold std (about 0.013 to 0.017), the lead of any single model is not meaningful, but I would choose AdaBoost: it ties the oblique random forest at 0.682 and has the best untuned score (0.668), a small gap (+0.004) and zero optimism, so its estimate is the most trustworthy. The chosen hyperparameters fit how each model works: the single decision tree needs heavy regularisation (depth 6, 101 samples per leaf) because it has high variance, the random forest can afford deeper trees (depth 11) since averaging reduces variance, the oblique forest uses shallow trees (depth 5) because each split is already a linear combination of features, and AdaBoost uses shallow weak learners (depth 4) with a low learning rate (0.025) to avoid fitting noise. I would report AdaBoost's nested CV score of 0.682 ± 0.017 rather than the 0.684 tuning score, since the latter is the best of 30 trials and therefore optimistic. Once the model is chosen, the locked test set should be evaluated once for the final number.
+
 
 ## Scoreboard
 Selection metric: **F1** (mean over the 5 stratified outer folds; "Tuned" = nested CV with 10 Optuna trials; "Untuned" = `config.yaml` defaults of that model on the same folds; "Floor" = dummy classifier that always predicts the majority class, so it never flags anyone and its F1 is 0)
@@ -130,6 +137,7 @@ Tuning helped most the models that overfit with their default settings: the deci
 
 Random forest and HistGradientBoosting are tied at the top (0.641; corrected paired t-test p = 0.891). I compared the random forest with each other model using the corrected paired t-test (Nadeau & Bengio) on the five fold scores in `results/runs.csv`, which are paired because every run uses the same folds. It is clearly better than Naive Bayes (p < 0.001) and better than the oblique random forest (+0.025, 5/5 folds, p = 0.011) and logistic regression (+0.009, 5/5 folds, p = 0.025), but I cannot separate it from the decision tree (p = 0.51), AdaBoost (p = 0.09) or gradient boosting (p = 0.09). With seven comparisons, p-values around 0.01-0.03 are only weak evidence, so the honest summary is that the tuned models are mostly within noise of each other (fold std 0.009-0.030) and only Naive Bayes is clearly worse.
 
+
 ## Feature Selection
 **Tuned** XGBoost run twice on the same data and the same folds, with feature selection off and on (`feature_selection.enabled` in `config.yaml`). When it is on, `select__min_votes` is tuned together with the model, and both scores are nested-CV estimates (selection metric: F1).
 
@@ -150,6 +158,7 @@ Tuned XGBoost achieved an F1 score of 0.623 without feature selection and 0.615 
 Feature selection proved extremely aggressive: only `age` and `priors_count` received any vote from the three models, so the final model uses just 2 of the 10 inputs, even with `min_votes` = 1. This much smaller model performs within noise of the full one, though it scored lower in 4 of the 5 folds.
 I would keep selection on, since a 2-feature model is far easier to explain and deploy, and no loss in performance could be detected. If maximizing F1 was the only goal, I would turn it off, since 5 folds are too few to rule out a small drop.
 
+
 ## Beyond COMPAS
 I chose **option A**: adapt the pipeline for new data (Adult income)  
 Target question: Is a person's income above 50,000 USD?
@@ -159,7 +168,7 @@ Target question: Is a person's income above 50,000 USD?
 python main.py config_adult.yaml        # for Adult income data
 python main.py                          # for COMPAS, exactly as before (config.yaml)
 ```
-The final model's predictions for `data/adult_new.csv` are save in `predictions/adult_new_predictions.csv` (`id`, `probability`, `predicition`).
+The final model's predictions for `data/adult_new.csv` are saved in `predictions/adult_new_predictions.csv` (`id`, `probability`, `prediction`).
 
 ### What broke, why, and how to fix it
 | | What broke | Why | Fix |
@@ -199,6 +208,38 @@ All scores are nested cross-validation estimates on the development set (5 strat
 **Features and fairness:** Selection kept 8 of 36 inputs and no `v` column, so the anonymous columns added nothing that the three voting models could use. Both sensitive attributes were excluded from the features and audited. The false positive rate (people earning ≤ 50K predicted to earn more) of the final model is 0.09 for men and 0.02 for women; the class-weighted models show larger values (for example 0.27 vs 0.06 for hist gradient boosting). By race it ranges from 0.03 to 0.10, but the smallest groups have fewer than 110 people, so those rates are noisy. Excluding `race` and `sex` does not remove proxies such as `relationship` or `marital_status`.
 
 **Reflection:** The hardest assumptions to find were the ones that do not crash. The `KeyError`s pointed straight to the line that assumed COMPAS, but a `?` stays as a category unless its column is listed in `canonical_categories`, and a column missing from the feature lists is silently left out of the model, so I had to check the missing counts (379, 381 and 86) and the "features kept" line. Going from a single decision tree (ROC-AUC 0.72, accuracy 0.80, F1 0.58) to boosted ensembles of shallow trees is what reached the targets. The class-weighting trade-off explains why the unweighted boosters met all three and the weighted models did not.
+
+
+## Missing values and deployment
+
+### Missing values
+**Untuned** logistic regression (feature selection and feature engineering off) run four times on the same data and the same folds, once per `imputation.numeric_strategy` in `config.yaml`: `median`, `knn`, `iterative` and `random_forest` (selection metric: F1).
+
+| Imputer | F1 (mean ± std) |
+|---|---|
+| iterative | 0.636 ± 0.014 |
+| random_forest | 0.633 ± 0.014 |
+| median | 0.633 ± 0.011 |
+| knn | 0.633 ± 0.015 |
+
+<br>
+
+Corrected paired t-test (Nadeau & Bengio, 5 folds, `compare_runs.py`), reference = `iterative`:
+
+| Imputer | Difference (iterative - imputer) | Folds won by `iterative` | t | p-value | p < 0.05 |
+|---|---|---|---|---|---|
+| random_forest | +0.0028 | 4/5 | 1.32 | 0.258 | no |
+| median | +0.0029 | 3/5 | 0.57 | 0.598 | no |
+| knn | +0.0033 | 4/5 | 0.98 | 0.384 | no |
+
+No imputer is significantly different from the others: the largest gap is +0.003 F1, much smaller than the fold-to-fold std (0.011-0.015). I keep `iterative` because it has the highest mean, but this is not a statistically strong choice, and `median` would do just as well. The imputers only see the five numeric columns, which say little about each other, so none of them can guess much better than the median.
+
+### Predicting new data
+```bash
+python main.py                                                          # trains, evaluates and saves models/model.joblib
+python predict.py data/compas_new_people.csv predictions/predictions.csv   # predicts the new people with the saved model
+```
+`predict.py` cleans the new file exactly like the training data (but never drops a row), builds the same features and uses the saved pipeline, so nothing is learned from the new data. The output has one row per input row, with `id`, `probability` (of reoffending within two years) and `prediction` (1 if the probability is at least 0.5): the 20 people in `data/compas_new_people.csv` give 20 rows. The `?` in `priors_count` and the missing age are imputed with the values learned in training, an unseen `c_charge_degree` does not crash the encoder, and the same person appearing twice gets two identical predictions.
 
 
 ## Environment setup
