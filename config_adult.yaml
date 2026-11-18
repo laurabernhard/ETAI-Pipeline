@@ -12,11 +12,6 @@ test_set:
   size: 0.2
   random_state: 42
 
-predict:
-  data_path: "data/adult_new.csv"
-  output_path: "predictions/adult_new_predictions.csv"
-  threshold: 0.5
-
 cv:
   n_splits: 5
   shuffle: true
@@ -63,12 +58,12 @@ feature_engineering:
   features: []
 
 model:
-  type: "gradient_boosting"     # dummy | logistic_regression | naive_bayes | decision_tree | random_forest | oblique_random_forest | adaboost | gradient_boosting | hist_gradient_boosting | xgboost
+  type: "logistic_regression"     # dummy | logistic_regression | naive_bayes | decision_tree | random_forest | oblique_random_forest | adaboost | gradient_boosting | hist_gradient_boosting | xgboost
   params:
   # logistic_regression:
-    # {max_iter: 2000, class_weight: balanced}
+    {max_iter: 2000, class_weight: balanced}
   # naive_bayes / gradient_boosting:
-    {}
+    # {}
   # decision_tree:
     # {random_state: 42, class_weight: balanced}
   # random_forest:
