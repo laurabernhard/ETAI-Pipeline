@@ -7,30 +7,35 @@ functions, same config). This week's new code is written in the notebook, not he
 """
 from pathlib import Path
 
-import numpy as np
-import optuna
-import pandas as pd
 import yaml
-from category_encoders import CountEncoder
-from scipy import stats
-from sklearn.base import clone
+import pandas as pd
+import numpy as np
 from sklearn.compose import ColumnTransformer
+from sklearn.pipeline import Pipeline
+from sklearn.impute import SimpleImputer
+from sklearn.model_selection import StratifiedKFold, train_test_split
+from sklearn.preprocessing import (
+    OneHotEncoder, OrdinalEncoder, TargetEncoder, StandardScaler, MinMaxScaler, RobustScaler,
+)
+from category_encoders import CountEncoder
+from sklearn.base import BaseEstimator
 from sklearn.dummy import DummyClassifier
 from sklearn.ensemble import (
     AdaBoostClassifier, BaggingClassifier, GradientBoostingClassifier, HistGradientBoostingClassifier,
     RandomForestClassifier,
 )
-from sklearn.impute import SimpleImputer
+from sklearn.feature_selection import SelectorMixin
 from sklearn.linear_model import LogisticRegression
-from sklearn.metrics import classification_report, confusion_matrix, fbeta_score, get_scorer, make_scorer
-from sklearn.model_selection import StratifiedKFold, cross_val_score, cross_validate, train_test_split
 from sklearn.naive_bayes import GaussianNB
-from sklearn.pipeline import Pipeline
-from sklearn.preprocessing import (
-    OneHotEncoder, OrdinalEncoder, TargetEncoder, StandardScaler, MinMaxScaler, RobustScaler,
-)
 from sklearn.random_projection import SparseRandomProjection
 from sklearn.tree import DecisionTreeClassifier
+from xgboost import XGBClassifier
+from scipy import stats
+from sklearn.metrics import classification_report, confusion_matrix, fbeta_score, get_scorer, make_scorer
+from sklearn.model_selection import cross_validate
+import optuna
+from sklearn.base import clone
+from sklearn.model_selection import cross_val_score
 
 optuna.logging.set_verbosity(optuna.logging.WARNING)
 DATA_DIR = Path(__file__).parent / "data"
@@ -102,11 +107,12 @@ preprocessing:
     categorical_strategy: "most_frequent"
 
 model:
-  type: "naive_bayes"  # dummy | logistic_regression | naive_bayes | decision_tree | random_forest | oblique_random_forest | adaboost | gradient_boosting | hist_gradient_boosting
+  type: "xgboost"  # dummy | logistic_regression | naive_bayes | decision_tree | random_forest | oblique_random_forest | adaboost | gradient_boosting | hist_gradient_boosting | xgboost
   params:
-    {}
+    {n_estimators: 300, learning_rate: 0.05, max_depth: 4, random_state: 42, n_jobs: -1}
   # Other models' params, to swap in. class_weight "balanced" weights each class by 1 / its frequency
-  # (GradientBoostingClassifier and GaussianNB have no class_weight).
+  # (GradientBoostingClassifier and GaussianNB have no class_weight; XGBoost's equivalent is
+  # scale_pos_weight = negatives / positives, about 1.2 here).
   # logistic_regression:    {max_iter: 2000, class_weight: balanced}
   # naive_bayes:            {}
   # decision_tree:          {random_state: 42, class_weight: balanced}
@@ -114,6 +120,17 @@ model:
   # oblique_random_forest:  {n_estimators: 200, n_components: 10, random_state: 42, n_jobs: -1}
   # adaboost:               {max_depth: 1, n_estimators: 200, learning_rate: 1.0, random_state: 42}
   # hist_gradient_boosting: {random_state: 42, class_weight: balanced}
+  # gradient_boosting:      {random_state: 42}
+  # xgboost:                {n_estimators: 300, learning_rate: 0.05, max_depth: 4, random_state: 42, n_jobs: -1}
+
+# Learned step between preprocessing and the model: keeps the features that at least
+# min_votes of three models (random forest, gradient boosting, L1 logistic regression) choose.
+feature_selection:
+  enabled: true
+  min_votes: 2                                      # 1 (keep almost all) .. 3 (keep only unanimous)
+  random_state: 42
+  search_space:                                     # tuned together with the model when tuning is on
+    select__min_votes: {type: int, low: 1, high: 3}
 
 tuning:
   enabled: true
@@ -153,6 +170,16 @@ tuning:
       model__l2_regularization: {type: float, low: 0.000001, high: 10.0, log: true}
     naive_bayes:
       model__var_smoothing: {type: float, low: 0.000000000001, high: 0.1, log: true}
+    xgboost:
+      model__n_estimators: {type: int, low: 50, high: 600, log: true}
+      model__learning_rate: {type: float, low: 0.01, high: 0.3, log: true}
+      model__max_depth: {type: int, low: 1, high: 8}
+      model__min_child_weight: {type: float, low: 1.0, high: 50.0, log: true}
+      model__subsample: {type: float, low: 0.5, high: 1.0}
+      model__colsample_bytree: {type: float, low: 0.5, high: 1.0}
+      model__reg_lambda: {type: float, low: 0.01, high: 10.0, log: true}
+      model__reg_alpha: {type: float, low: 0.001, high: 10.0, log: true}
+      model__gamma: {type: float, low: 0.0, high: 5.0}
 
 output:
   results_dir: "results"
@@ -258,6 +285,8 @@ def split_features_target(df: pd.DataFrame, data_config: dict, mnar_indicator_so
 
 
 _SCALERS = {"none": "passthrough", "standard": StandardScaler, "minmax": MinMaxScaler, "robust": RobustScaler}
+
+
 # sklearn's TargetEncoder cross-fits: a training row's encoding never uses its own label.
 _ENCODERS = {
     "onehot": lambda seed: OneHotEncoder(handle_unknown="ignore", sparse_output=False),
@@ -339,6 +368,7 @@ _MODELS = {
     "gradient_boosting": GradientBoostingClassifier,
     "hist_gradient_boosting": HistGradientBoostingClassifier,
     "naive_bayes": GaussianNB,
+    "xgboost": XGBClassifier,
 }
 
 
@@ -353,17 +383,47 @@ def build_model(model_config: dict):
     return _MODELS[model_type](**params)
 
 
-def build_pipeline(preprocessing_config: dict, model_config: dict) -> Pipeline:
+class VoteSelector(SelectorMixin, BaseEstimator):
     """
-    The estimator that is cross-validated, tuned and refit: preprocessing and model as one
-    Pipeline, so every learned step is re-fit on the training part of each fold. Step names
-    address hyperparameters from outside (`model__max_depth`, `prep__numeric__impute__strategy`).
-    Any new learned step (e.g. feature selection) belongs here, between "prep" and "model".
+    Keeps the features chosen by at least `min_votes` of three models, fitted on the training
+    rows only: a random forest and gradient boosting vote for features with above-average
+    importance, an L1-penalised logistic regression for features it doesn't shrink to zero.
     """
-    return Pipeline([
-        ("prep", build_preprocessor(preprocessing_config)),
-        ("model", build_model(model_config)),
-    ])
+
+    def __init__(self, min_votes: int = 2, random_state=None):
+        self.min_votes = min_votes
+        self.random_state = random_state
+
+    def fit(self, X, y):
+        forest = RandomForestClassifier(n_estimators=200, min_samples_leaf=20, random_state=self.random_state, n_jobs=-1).fit(X, y)
+        booster = GradientBoostingClassifier(random_state=self.random_state).fit(X, y)
+        lasso = LogisticRegression(l1_ratio=1.0, C=0.01, solver="liblinear").fit(X, y)
+        self.votes_ = ((forest.feature_importances_ > forest.feature_importances_.mean()).astype(int)
+                       + (booster.feature_importances_ > booster.feature_importances_.mean())
+                       + (np.abs(lasso.coef_[0]) > 1e-8))
+        self.support_ = self.votes_ >= self.min_votes
+        return self
+
+    def _get_support_mask(self):
+        return self.support_
+
+
+def build_pipeline(preprocessing_config: dict, model_config: dict, selection_config: dict = None,
+                   memory=None) -> Pipeline:
+    """
+    The estimator that is cross-validated, tuned and refit: preprocessing, feature selection
+    (if `selection_config["enabled"]`) and model as one Pipeline, so every learned step is
+    re-fit on the training part of each fold. Step names address hyperparameters from outside
+    (`model__max_depth`, `select__min_votes`). `memory` (a folder) caches the fitted
+    preprocessing and selection steps: a fit on the same rows with the same settings is
+    reused instead of repeated, so tuning the model doesn't refit them in every trial.
+    """
+    steps = [("prep", build_preprocessor(preprocessing_config))]
+    if selection_config and selection_config.get("enabled", False):
+        steps.append(("select", VoteSelector(min_votes=selection_config.get("min_votes", 2),
+                                             random_state=selection_config.get("random_state"))))
+    steps.append(("model", build_model(model_config)))
+    return Pipeline(steps, memory=memory)
 
 
 def build_scorers(metrics: list) -> dict:
