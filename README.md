@@ -210,7 +210,7 @@ All scores are nested cross-validation estimates on the development set (5 strat
 **Reflection:** The hardest assumptions to find were the ones that do not crash. The `KeyError`s pointed straight to the line that assumed COMPAS, but a `?` stays as a category unless its column is listed in `canonical_categories`, and a column missing from the feature lists is silently left out of the model, so I had to check the missing counts (379, 381 and 86) and the "features kept" line. Going from a single decision tree (ROC-AUC 0.72, accuracy 0.80, F1 0.58) to boosted ensembles of shallow trees is what reached the targets. The class-weighting trade-off explains why the unweighted boosters met all three and the weighted models did not.
 
 
-## Missing values and deployment
+## Missing values and deployment (COMPAS data)
 
 ### Missing values
 **Untuned** logistic regression (feature selection and feature engineering off) run four times on the same data and the same folds, once per `imputation.numeric_strategy` in `config.yaml`: `median`, `knn`, `iterative` and `random_forest` (selection metric: F1).
@@ -232,7 +232,7 @@ Corrected paired t-test (Nadeau & Bengio, 5 folds, `compare_runs.py`), reference
 | median | +0.0029 | 3/5 | 0.57 | 0.598 | no |
 | knn | +0.0033 | 4/5 | 0.98 | 0.384 | no |
 
-No imputer is significantly different from the others: the largest gap is +0.003 F1, much smaller than the fold-to-fold std (0.011-0.015). I keep `iterative` because it has the highest mean, but this is not a statistically strong choice, and `median` would do just as well. The imputers only see the five numeric columns, which say little about each other, so none of them can guess much better than the median.
+No imputer is significantly different from the others: the largest gap is +0.003 F1, much smaller than the fold-to-fold std (0.011-0.015). I keep `iterative` because it has the highest mean, but this is not a statistically strong choice, and any of the other imputers would do just as well. The imputers only see the five numeric columns, which say little about each other, so none of them can guess much better than the median.
 
 ### Predicting new data
 ```bash
