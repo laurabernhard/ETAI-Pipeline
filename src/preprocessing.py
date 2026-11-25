@@ -12,13 +12,15 @@ One thing that is NOT naive, on purpose: `sensitive_attr` (race) is kept out of 
 """
 import numpy as np
 import pandas as pd
+from sklearn.base import BaseEstimator, TransformerMixin
 from sklearn.compose import ColumnTransformer
 from sklearn.pipeline import Pipeline
 from sklearn.experimental import enable_iterative_imputer   # noqa: F401  (makes IterativeImputer importable)
 from sklearn.impute import SimpleImputer, IterativeImputer, KNNImputer
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import OneHotEncoder, OrdinalEncoder, TargetEncoder, StandardScaler, MinMaxScaler, RobustScaler
-from sklearn.ensemble import RandomForestRegressor
+from sklearn.ensemble import RandomForestRegressor, IsolationForest
+from sklearn.neighbors import LocalOutlierFactor
 from category_encoders import CountEncoder
 
 
@@ -222,3 +224,46 @@ def add_engineered_features(df: pd.DataFrame, config: dict) -> pd.DataFrame:
     if "early_onset" in features:
         out["early_onset"] = ((out["juvenile_total"] > 0) & (out["priors_count"] > 0)).astype(int)
     return out
+
+
+class AnomalyScore(TransformerMixin, BaseEstimator):
+    """
+    Appends one column, `anomaly_score`, to the preprocessed features: how unusual each row is
+    compared with the training rows (higher = more unusual). `method` is "isolation_forest"
+    (the score is the theory's s(x), about 0.5 for ordinary rows and close to 1 for anomalies)
+    or "lof" (the Local Outlier Factor, about 1 for ordinary rows; `n_neighbors` should be
+    larger than the largest group of identical rows). The detector is fitted on the training
+    rows only and then scores any rows, so it runs unchanged in CV and on data to predict.
+    """
+
+    def __init__(self, method: str = "isolation_forest", n_neighbors: int = 20, random_state=None):
+        self.method = method
+        self.n_neighbors = n_neighbors
+        self.random_state = random_state
+
+    def fit(self, X, y=None):
+        if self.method == "isolation_forest":
+            self.detector_ = IsolationForest(random_state=self.random_state)
+        elif self.method == "lof":
+            self.detector_ = LocalOutlierFactor(n_neighbors=self.n_neighbors, novelty=True)
+        else:
+            raise ValueError(f"Unknown anomaly method: {self.method}. Options: isolation_forest, lof")
+        self.detector_.fit(X)
+        self.n_features_in_ = np.asarray(X).shape[1]
+        return self
+
+    def fit_transform(self, X, y=None):
+        """Fits on X and scores it. LOF scores its own training rows without counting each row as its own neighbour."""
+        self.fit(X)
+        if self.method == "lof":
+            return np.column_stack([X, -self.detector_.negative_outlier_factor_])
+        return self.transform(X)
+
+    def transform(self, X):
+        return np.column_stack([X, -self.detector_.score_samples(X)])
+
+    def get_feature_names_out(self, input_features=None):
+        if input_features is None:
+            input_features = [f"x{i}" for i in range(self.n_features_in_)]
+        return np.append(np.asarray(input_features, dtype=object), "anomaly_score")
+    

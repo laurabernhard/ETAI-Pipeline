@@ -1,20 +1,20 @@
 """Model construction."""
 import numpy as np
+from sklearn.base import BaseEstimator
 from sklearn.dummy import DummyClassifier
-from sklearn.linear_model import LogisticRegression
-from sklearn.tree import DecisionTreeClassifier
-from sklearn.naive_bayes import GaussianNB
-from xgboost import XGBClassifier
 from sklearn.ensemble import (
     RandomForestClassifier, AdaBoostClassifier, BaggingClassifier, GradientBoostingClassifier,
     HistGradientBoostingClassifier
 )
+from sklearn.feature_selection import SelectorMixin
+from sklearn.linear_model import LogisticRegression
+from sklearn.naive_bayes import GaussianNB
 from sklearn.pipeline import Pipeline
 from sklearn.random_projection import SparseRandomProjection
-from sklearn.base import BaseEstimator
-from sklearn.feature_selection import SelectorMixin
+from sklearn.tree import DecisionTreeClassifier
+from xgboost import XGBClassifier
 
-from src.preprocessing import build_preprocessor
+from src.preprocessing import AnomalyScore, build_preprocessor
 
 
 def adaboost(max_depth: int = 1, **params):
@@ -92,16 +92,23 @@ def build_model(model_config: dict):
     return _MODELS[model_type](**params)
 
 
-def build_pipeline(preprocessing_config: dict, model_config: dict, selection_config: dict = None, memory=None) -> Pipeline:
+def build_pipeline(preprocessing_config: dict, model_config: dict, selection_config: dict = None,
+                   memory=None, anomaly_config: dict = None) -> Pipeline:
     """
-    The estimator that is cross-validated, tuned and refit: preprocessing, feature selection
-    (if `selection_config["enabled"]`) and model as one Pipeline, so every learned step is
-    re-fit on the training part of each fold. Step names address hyperparameters from outside
-    (`model__max_depth`, `select__min_votes`). `memory` (a folder) caches the fitted
-    preprocessing and selection steps: a fit on the same rows with the same settings is
-    reused instead of repeated, so tuning the model doesn't refit them in every trial.
+    The estimator that is cross-validated, tuned and refit: preprocessing, the anomaly score
+    (if `anomaly_config["method"]` is not "none"), feature selection (if
+    `selection_config["enabled"]`) and model as one Pipeline, so every learned step is re-fit
+    on the training part of each fold. Step names address hyperparameters from outside
+    (`model__max_depth`, `select__min_votes`, `anomaly__n_neighbors`). `memory` (a folder)
+    caches the fitted preprocessing, anomaly and selection steps: a fit on the same rows with
+    the same settings is reused instead of repeated, so tuning the model doesn't refit them in
+    every trial.
     """
     steps = [("prep", build_preprocessor(preprocessing_config))]
+    if anomaly_config and anomaly_config.get("method", "none") != "none":
+        steps.append(("anomaly", AnomalyScore(method=anomaly_config["method"],
+                                              n_neighbors=anomaly_config.get("n_neighbors", 20),
+                                              random_state=anomaly_config.get("random_state"))))
     if selection_config and selection_config.get("enabled", False):
         steps.append(("select", VoteSelector(min_votes=selection_config.get("min_votes", 2),
                                              random_state=selection_config.get("random_state"))))

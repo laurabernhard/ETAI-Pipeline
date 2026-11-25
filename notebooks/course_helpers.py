@@ -11,8 +11,10 @@ import yaml
 import pandas as pd
 import numpy as np
 from sklearn.compose import ColumnTransformer
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.experimental import enable_iterative_imputer  # noqa: F401  (makes IterativeImputer importable)
 from sklearn.pipeline import Pipeline
-from sklearn.impute import SimpleImputer
+from sklearn.impute import IterativeImputer, KNNImputer, SimpleImputer
 from sklearn.model_selection import StratifiedKFold, train_test_split
 from sklearn.preprocessing import (
     OneHotEncoder, OrdinalEncoder, TargetEncoder, StandardScaler, MinMaxScaler, RobustScaler,
@@ -101,10 +103,13 @@ preprocessing:
   numeric_features: ["age", "juv_fel_count", "juv_misd_count", "juv_other_count", "priors_count"]
   categorical_features: ["sex", "age_cat", "c_charge_degree"]
   mnar_indicator_sources: ["priors_count", "c_charge_degree"]   # get a <col>_was_missing flag
-  random_state: 42                                  # target encoder's internal folds
+  random_state: 42                                  # target encoder's folds and the model-based imputers
   imputation:
-    numeric_strategy: "median"
+    numeric_strategy: "median"                      # median | mean | knn | iterative | random_forest
     categorical_strategy: "most_frequent"
+    n_neighbors: 5                                  # knn
+    max_iter: 10                                    # iterative, random_forest
+    n_estimators: 50                                # random_forest (trees per column)
 
 model:
   type: "xgboost"  # dummy | logistic_regression | naive_bayes | decision_tree | random_forest | oblique_random_forest | adaboost | gradient_boosting | hist_gradient_boosting | xgboost
@@ -183,16 +188,20 @@ tuning:
 
 output:
   results_dir: "results"
+  model_path: "models/model.joblib"                 # the final fitted pipeline, used by predict.py (overwritten each run)
   scoreboard: "results/runs.csv"                    # one row per run; delete it when the data, cleaning or folds change
 """)
 
 
-# ---- src/data.py, src/preprocessing.py, src/model.py, src/evaluate.py, src/tuning.py ----
+# ---- src/data.py ----
 
 def load_data(path: str) -> pd.DataFrame:
     """Load the raw dataset from a CSV file."""
     return pd.read_csv(path)
 
+
+
+# ---- src/preprocessing.py ----
 
 def flag_invalid_values(df: pd.DataFrame, rules: dict) -> pd.DataFrame:
     """
@@ -212,6 +221,7 @@ def flag_invalid_values(df: pd.DataFrame, rules: dict) -> pd.DataFrame:
     return pd.DataFrame(report_rows)
 
 
+
 def _canonicalize_categories(df: pd.DataFrame, columns_and_maps: dict, placeholder_tokens: set) -> pd.DataFrame:
     out = df.copy()
     for col, mapping in columns_and_maps.items():
@@ -222,6 +232,7 @@ def _canonicalize_categories(df: pd.DataFrame, columns_and_maps: dict, placehold
         out[col] = lowered.map(mapping).fillna(cleaned)
         out.loc[out[col].astype(str).str.strip().isin(placeholder_tokens), col] = np.nan
     return out
+
 
 
 def clean_dataset(df: pd.DataFrame, diagnostics_config: dict) -> pd.DataFrame:
@@ -244,6 +255,7 @@ def clean_dataset(df: pd.DataFrame, diagnostics_config: dict) -> pd.DataFrame:
     return out.drop(columns=columns_to_drop)
 
 
+
 def drop_duplicate_rows(df: pd.DataFrame, id_column: str = None) -> pd.DataFrame:
     """
     Training data only, before `split_dev_test`: drops exact duplicate rows and repeated ids
@@ -255,6 +267,7 @@ def drop_duplicate_rows(df: pd.DataFrame, id_column: str = None) -> pd.DataFrame
     return out
 
 
+
 def add_missingness_indicators(df: pd.DataFrame, mnar_indicator_sources: list) -> pd.DataFrame:
     """Adds a `<col>_was_missing` flag for each listed column, before it is imputed."""
     out = df.copy()
@@ -262,6 +275,7 @@ def add_missingness_indicators(df: pd.DataFrame, mnar_indicator_sources: list) -
         if col in out.columns:
             out[f"{col}_was_missing"] = out[col].isna().astype(int)
     return out
+
 
 
 def split_features_target(df: pd.DataFrame, data_config: dict, mnar_indicator_sources: list):
@@ -284,7 +298,9 @@ def split_features_target(df: pd.DataFrame, data_config: dict, mnar_indicator_so
     return df[feature_cols], y, extras
 
 
+
 _SCALERS = {"none": "passthrough", "standard": StandardScaler, "minmax": MinMaxScaler, "robust": RobustScaler}
+
 
 
 # sklearn's TargetEncoder cross-fits: a training row's encoding never uses its own label.
@@ -296,20 +312,41 @@ _ENCODERS = {
 }
 
 
+
+# Numeric imputers. "iterative" is MICE with one completed dataset; "random_forest" is the
+# missForest idea (each column predicted from the others by a random forest). Both learn only
+# from the feature columns, never from the target, so they also run on data to predict.
+_NUMERIC_IMPUTERS = {
+    "median": lambda cfg, seed: SimpleImputer(strategy="median"),
+    "mean": lambda cfg, seed: SimpleImputer(strategy="mean"),
+    "knn": lambda cfg, seed: KNNImputer(n_neighbors=cfg.get("n_neighbors", 5)),
+    "iterative": lambda cfg, seed: IterativeImputer(max_iter=cfg.get("max_iter", 10), random_state=seed),
+    "random_forest": lambda cfg, seed: IterativeImputer(
+        estimator=RandomForestRegressor(n_estimators=cfg.get("n_estimators", 50), min_samples_leaf=5,
+                                        random_state=seed, n_jobs=-1),
+        max_iter=cfg.get("max_iter", 10), random_state=seed),
+}
+
+
+
 def build_preprocessor(preprocessing_config: dict) -> ColumnTransformer:
     """
-    Builds the unfitted ColumnTransformer described by `preprocessing_config`: imputation and
-    scaling for numeric columns, imputation and encoding for categorical ones, and the
-    missingness flags passed through. Every encoder tolerates unseen categories.
+    Builds the unfitted ColumnTransformer described by `preprocessing_config`: scaling and
+    imputation for numeric columns (scaled first, so distance-based imputers compare columns
+    on one scale; scalers ignore NaN when fitting), imputation and encoding for categorical
+    ones, and the missingness flags passed through. Every encoder tolerates unseen categories.
     """
     imputation = preprocessing_config.get("imputation", {})
     scaler_factory = _SCALERS[preprocessing_config["scaler"]]
     scaler = scaler_factory() if callable(scaler_factory) else scaler_factory
     encoder = _ENCODERS[preprocessing_config["encoder"]](preprocessing_config.get("random_state"))
+    numeric_strategy = imputation.get("numeric_strategy", "median")
+    if numeric_strategy not in _NUMERIC_IMPUTERS:
+        raise ValueError(f"Unknown numeric_strategy: {numeric_strategy}. Options: {list(_NUMERIC_IMPUTERS)}")
 
     numeric_pipeline = Pipeline([
-        ("impute", SimpleImputer(strategy=imputation.get("numeric_strategy", "median"))),
         ("scale", scaler),
+        ("impute", _NUMERIC_IMPUTERS[numeric_strategy](imputation, preprocessing_config.get("random_state"))),
     ])
     categorical_pipeline = Pipeline([
         ("impute", SimpleImputer(strategy=imputation.get("categorical_strategy", "most_frequent"))),
@@ -324,6 +361,7 @@ def build_preprocessor(preprocessing_config: dict) -> ColumnTransformer:
     ])
 
 
+
 def split_dev_test(X, y, extras, test_size: float, random_state: int):
     """
     Stratified split into a development set, used for every decision, and a locked test set,
@@ -333,12 +371,16 @@ def split_dev_test(X, y, extras, test_size: float, random_state: int):
     return train_test_split(X, y, extras, test_size=test_size, random_state=random_state, stratify=y)
 
 
+
+# ---- src/model.py ----
+
 def adaboost(max_depth: int = 1, **params):
     """
     AdaBoost over decision trees of depth `max_depth` (1 = stumps); `params` go to
     AdaBoostClassifier. The trees' depth is tuned as `model__estimator__max_depth`.
     """
     return AdaBoostClassifier(estimator=DecisionTreeClassifier(max_depth=max_depth), **params)
+
 
 
 def oblique_random_forest(n_estimators: int = 100, n_components: int = 10, density="auto",
@@ -358,6 +400,7 @@ def oblique_random_forest(n_estimators: int = 100, n_components: int = 10, densi
                              random_state=random_state, n_jobs=n_jobs)
 
 
+
 _MODELS = {
     "dummy": DummyClassifier,
     "logistic_regression": LogisticRegression,
@@ -372,6 +415,7 @@ _MODELS = {
 }
 
 
+
 def build_model(model_config: dict):
     """Builds the model named by `model_config["type"]` with `model_config["params"]`."""
     model_type = model_config["type"]
@@ -381,6 +425,7 @@ def build_model(model_config: dict):
         raise ValueError(f"Unknown model type: {model_type}. Options: {list(_MODELS)}")
 
     return _MODELS[model_type](**params)
+
 
 
 class VoteSelector(SelectorMixin, BaseEstimator):
@@ -408,6 +453,7 @@ class VoteSelector(SelectorMixin, BaseEstimator):
         return self.support_
 
 
+
 def build_pipeline(preprocessing_config: dict, model_config: dict, selection_config: dict = None,
                    memory=None) -> Pipeline:
     """
@@ -426,6 +472,9 @@ def build_pipeline(preprocessing_config: dict, model_config: dict, selection_con
     return Pipeline(steps, memory=memory)
 
 
+
+# ---- src/evaluate.py ----
+
 def build_scorers(metrics: list) -> dict:
     """
     {name: scorer} for scikit-learn metric names (`accuracy`, `roc_auc`, ...), plus `fbeta_<beta>`
@@ -438,6 +487,7 @@ def build_scorers(metrics: list) -> dict:
         else:
             scorers[name] = get_scorer(name)
     return scorers
+
 
 
 def cross_validate_pipeline(pipeline, X, y, cv, scorers: dict, selection_metric: str, n_jobs: int = 1):
@@ -467,6 +517,7 @@ def cross_validate_pipeline(pipeline, X, y, cv, scorers: dict, selection_metric:
     return fold_scores, oof_proba
 
 
+
 def cv_report(fold_scores: pd.DataFrame, metrics: list, selection_metric: str, title: str) -> str:
     """Per-fold table and the mean and std of every metric, as text."""
     lines = [
@@ -478,6 +529,7 @@ def cv_report(fold_scores: pd.DataFrame, metrics: list, selection_metric: str, t
         f"\n{selection_metric}: train-validation gap mean = {fold_scores['gap'].mean():+.3f}",
     ]
     return "\n".join(lines)
+
 
 
 def corrected_paired_test(scores_a, scores_b, test_train_ratio: float) -> dict:
@@ -498,6 +550,7 @@ def corrected_paired_test(scores_a, scores_b, test_train_ratio: float) -> dict:
     return {"mean_diff": float(diff.mean()), "wins": f"{int((diff > 0).sum())}/{k}", "t": t, "p_value": p_value}
 
 
+
 def oof_classification_report(y_true, oof_proba, threshold: float = 0.5) -> str:
     """Confusion matrix and classification report of the out-of-fold predictions, as text."""
     y_pred = (oof_proba >= threshold).astype(int)
@@ -505,6 +558,7 @@ def oof_classification_report(y_true, oof_proba, threshold: float = 0.5) -> str:
                       columns=["predicted 0", "predicted 1"])
     return (f"Out-of-fold predictions, development set (threshold {threshold}):\n\n"
             f"{cm.to_string()}\n\n{classification_report(y_true, y_pred, zero_division=0)}")
+
 
 
 def fairness_report(y_true, oof_proba, extras: pd.DataFrame, sensitive_attr: str = "race",
@@ -537,6 +591,9 @@ def fairness_report(y_true, oof_proba, extras: pd.DataFrame, sensitive_attr: str
         lines.append("")
     return "\n".join(lines)
 
+
+
+# ---- src/tuning.py ----
 
 def tune_pipeline(pipeline, X, y, cv, scorer, search_space: dict, n_trials: int,
                   random_state: int, n_jobs: int = 1):
@@ -572,6 +629,7 @@ def tune_pipeline(pipeline, X, y, cv, scorer, search_space: dict, n_trials: int,
     return best_pipeline, study
 
 
+
 def nested_cross_validate(pipeline, X, y, outer_cv, inner_cv, scorers: dict, selection_metric: str,
                           search_space: dict, n_trials: int, random_state: int, n_jobs: int = 1):
     """
@@ -601,6 +659,7 @@ def nested_cross_validate(pipeline, X, y, outer_cv, inner_cv, scorers: dict, sel
     return pd.DataFrame(rows), oof_proba
 
 
+
 def tuning_report(study, nested_scores: pd.DataFrame, selection_metric: str, top: int = 5) -> str:
     """
     Best hyperparameters and top trials of the final study, plus the optimism check (mean
@@ -625,6 +684,19 @@ def tuning_report(study, nested_scores: pd.DataFrame, selection_metric: str, top
         f"  optimism = {inner - outer:+.3f}   -> report the honest one",
     ]
     return "\n".join(lines)
+
+
+
+# ---- predict.py ----
+
+def predict(df: pd.DataFrame, pipeline, config: dict) -> pd.DataFrame:
+    """Returns the id, the probability of the positive class and the prediction (at 0.5) for every row."""
+    clean = clean_dataset(df, config["diagnostics"])
+    X, _, _ = split_features_target(clean, config["data"], config["preprocessing"]["mnar_indicator_sources"])
+    probability = pipeline.predict_proba(X)[:, 1]
+    return pd.DataFrame({"id": df[config["diagnostics"]["id_column"]],
+                         "probability": probability,
+                         "prediction": (probability >= 0.5).astype(int)})
 
 
 def load_course_data(config: dict = CONFIG):
