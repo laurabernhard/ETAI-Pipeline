@@ -243,6 +243,48 @@ python predict.py data/compas_new_people.csv predictions/predictions.csv   # pre
 `predict.py` cleans the new file exactly like the training data (but never drops a row), builds the same features and uses the saved pipeline, so nothing is learned from the new data. The output has one row per input row, with `id`, `probability` (of reoffending within two years) and `prediction` (1 if the probability is at least 0.5): the 20 people in `data/compas_new_people.csv` give 20 rows. The `?` in `priors_count` and the missing age are imputed with the values learned in training, an unseen `c_charge_degree` does not crash the encoder, and the same person appearing twice gets two identical predictions.
 
 
+## Outliers and anomaly scores (COMPAS data)
+
+**My guess, written before running:** I expected the anomaly score to improve the model, because I assumed that the people who are unusual, with rare combinations of records, would be the ones who reoffend, and that a feature saying "how unusual" would help the model find them.
+
+### Does the anomaly score help?
+**Untuned** logistic regression (imputer `iterative`, feature selection and feature engineering off) run three times on the same data and the same folds, once per `anomaly.method` in `config.yaml`: `none` (no extra column), `isolation_forest` and `lof` (selection metric: F1).
+
+| Anomaly method | F1 (mean ± std) |
+|---|---|
+| none | 0.636 ± 0.014 |
+| lof | 0.635 ± 0.012 |
+| isolation_forest | 0.634 ± 0.014 |
+
+<br>
+
+Corrected paired t-test (Nadeau & Bengio, 5 folds, `compare_runs.py`), reference = `none`:
+
+| Anomaly method | Difference (none - method) | Folds won by `none` | t | p-value | p < 0.05 |
+|---|---|---|---|---|---|
+| lof | +0.0012 | 3/5 | 0.68 | 0.531 | no |
+| isolation_forest | +0.0017 | 4/5 | 0.67 | 0.540 | no |
+
+The anomaly score did not help: F1 is 0.636 without it and 0.634-0.635 with it. The differences are tiny compared with the fold-to-fold std (0.012-0.014) and not significant (p = 0.531 and 0.540). With only 5 folds the test has little power, so the right reading is "no measurable gain", not "no effect".
+
+### Are the people who reoffend the outliers?
+Reoffending rate of the 5% most unusual people (289 of the 5771 development rows, by anomaly score) compared with everyone else:
+
+| Method | Top 5% | The other 95% | Everyone |
+|---|---|---|---|
+| isolation_forest | 0.585 | 0.444 | 0.451 |
+| lof | 0.550 | 0.445 | 0.451 |
+
+<br>
+
+The most unusual people do reoffend more often: 58.5% (Isolation Forest) and 55.0% (LOF), against about 44.5% for the rest. So my guess was only half right: the unusual people do reoffend more, but the score does not improve the model. This is because the model already sees what makes these people unusual: the counts of priors and juvenile records, which are also its strongest predictors. The score is a summary of the same ten columns, so it adds little new information. Being unusual is also not the same as being wrong, and the two methods flag different kinds of people (Isolation Forest: extreme combinations of counts; LOF: people in a sparse spot next to a dense group), so the gap is larger for one than for the other.
+
+**Decision:** I keep `anomaly.method: "none"`, so the saved model is unchanged from week 10.
+
+
+<br>
+
+
 ## Environment setup
 You only need to do this once per machine.
 
