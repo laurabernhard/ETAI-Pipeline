@@ -39,6 +39,7 @@ def save_run(results_dir: str, run: str, config: dict, report_text: str) -> str:
         f"Preprocessing: encoder={config['preprocessing']['encoder']}  "
         f"scaler={config['preprocessing']['scaler']}  "
         f"numeric_imputer={config['preprocessing'].get('imputation', {}).get('numeric_strategy', 'median')}\n"
+        f"anomaly score={(config.get('anomaly') or {}).get('method', 'none')}\n"
         f"CV: {cv['n_splits']} stratified folds  shuffle={cv.get('shuffle', True)}  "
         f"random_state={cv.get('random_state')}\n"
         f"Metrics: {cv['metrics']}  selection metric: {cv['selection_metric']}\n"
