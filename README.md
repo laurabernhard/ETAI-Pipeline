@@ -268,7 +268,7 @@ Corrected paired t-test (Nadeau & Bengio, 5 folds, `compare_runs.py`), reference
 The anomaly score did not help: F1 is 0.636 without it and 0.634-0.635 with it. The differences are tiny compared with the fold-to-fold std (0.012-0.014) and not significant (p = 0.531 and 0.540). With only 5 folds the test has little power, so the right reading is "no measurable gain", not "no effect".
 
 ### Are the people who reoffend the outliers?
-Reoffending rate of the 5% most unusual people (289 of the 5771 development rows, by anomaly score) compared with everyone else:
+**Reoffending rate** of the 5% most unusual people (289 of the 5771 development rows, by anomaly score) compared with everyone else:
 
 | Method | Top 5% | The other 95% | Everyone |
 |---|---|---|---|
@@ -277,7 +277,7 @@ Reoffending rate of the 5% most unusual people (289 of the 5771 development rows
 
 <br>
 
-The most unusual people do reoffend more often: 58.5% (Isolation Forest) and 55.0% (LOF), against about 44.5% for the rest. So my guess was only half right: the unusual people do reoffend more, but the score does not improve the model. This is because the model already sees what makes these people unusual: `priors_count`, which (with `age`) is its strongest predictor, and the juvenile counts. The score is a summary of the same ten columns, so it adds little new information. Being unusual is also not the same as being wrong, and the two methods flag different kinds of people (Isolation Forest: extreme combinations of counts; LOF: people in a sparse spot next to a dense group), so the gap is larger for one than for the other.
+The most unusual people do reoffend more often: 58.5% (Isolation Forest) and 55.0% (LOF), against about 44.5% for the rest. So my guess was only half right: the unusual people do reoffend more, but the score does not improve the model. This is because the model already sees what makes these people unusual: `priors_count`, which is one of its strongest predictor, and the juvenile counts. The score is a summary of the same ten columns, so it adds little new information. Being unusual is also not the same as being wrong, and the two methods flag different kinds of people (Isolation Forest: extreme combinations of counts; LOF: people in a sparse spot next to a dense group), so the gap is larger for one than for the other.
 
 **Decision:** I keep `anomaly.method: "none"`, so the saved model is unchanged from week 10.
 
